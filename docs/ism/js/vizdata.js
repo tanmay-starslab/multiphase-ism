@@ -1,6 +1,11 @@
 // Pure data helpers for the Phase-2b 3D viewer (design §5.1): the tng50-viz/2 manifest, WebP atlas -> raw cube
 // bytes, gzip, SHA-256, u8 decoding, the LOD policy and the Lupton et al. (2004) asinh composite.
 // No DOM and no three.js: everything here also runs in node (tests/js/viz_decode.mjs, lod_policy.mjs, lupton_parity.mjs).
+import {
+  initFastVizWasm, wasmReady, wasm_cast_cube_ray, wasm_synthesize_voigt_12ions,
+  wasm_decode_lut_volume, wasm_pack_velocity
+} from "./fast_viz_wasm.js";
+export {initFastVizWasm, wasm_cast_cube_ray, wasm_synthesize_voigt_12ions, wasm_decode_lut_volume};
 export const SCHEMA = "tng50-viz/2";
 /* Phase 3: the gas fields are nH, T, Z plus the 12 registry ions in ladder order (tngsight.vizpack.VOL_KEYS) */
 export const ION_KEYS = ["HI", "MgII", "SiII", "CII", "SiIII", "CIII", "SiIV", "CIV", "NV", "OVI", "NeVIII", "OVII"];
@@ -62,6 +67,9 @@ export function velocityList(manifest) {
 }
 /* linear u8 decoding (encoding "linear"): q = 0 empty (NaN), else v = vmin + (q − 1)(vmax − vmin)/254, so q = 128 is 0 for vmin = −vmax */
 export function decodeLinear(q, vmin, vmax) {
+  if (wasmReady() && q instanceof Uint8Array && q.length >= 64) {
+    return wasm_decode_lut_volume(q, vmin, vmax, {mode: 0});
+  }
   const out = new Float32Array(q.length), s = (vmax - vmin) / 254;
   for (let i = 0; i < q.length; i++) out[i] = q[i] === 0 ? NaN : vmin + (q[i] - 1) * s;
   return out;
@@ -77,6 +85,9 @@ export function encodeLinear(v, V) {   // the inverse (tests): NaN -> 0 (empty),
    over the non-empty corners on both the fast and the exact shader path. */
 export function packVelocity(qx, qy, qz) {
   const N = qx.length; if (qy.length !== N || qz.length !== N) throw new Error("packVelocity: the component cubes differ in size");
+  if (wasmReady() && qx instanceof Uint8Array && qy instanceof Uint8Array && qz instanceof Uint8Array && N >= 64) {
+    return wasm_pack_velocity(qx, qy, qz);
+  }
   const out = new Uint8Array(4 * N);
   for (let i = 0, o = 0; i < N; i++, o += 4) {
     const a = qx[i], b = qy[i], c = qz[i];
@@ -288,6 +299,9 @@ export function sha256Js(u8) {
 }
 
 export function decodeU8(q, vmin, vmax) {
+  if (wasmReady() && q instanceof Uint8Array && q.length >= 64) {
+    return wasm_decode_lut_volume(q, vmin, vmax, {mode: 0});
+  }
   const out = new Float32Array(q.length), s = (vmax - vmin) / 254;
   for (let i = 0; i < q.length; i++) out[i] = q[i] === 0 ? NaN : vmin + (q[i] - 1) * s;
   return out;
