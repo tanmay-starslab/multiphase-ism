@@ -1,0 +1,69 @@
+;FFMETADATA1
+title=How a spectrum is made
+
+[CHAPTER]
+TIMEBASE=1/1000
+START=0
+END=16000
+title=density: where the gas is
+
+[CHAPTER]
+TIMEBASE=1/1000
+START=16000
+END=30000
+title=heat: which gas is warm
+
+[CHAPTER]
+TIMEBASE=1/1000
+START=30000
+END=45000
+title=amount: one clump goes black
+
+[CHAPTER]
+TIMEBASE=1/1000
+START=45000
+END=58000
+title=speed: where a dip sits
+
+[CHAPTER]
+TIMEBASE=1/1000
+START=58000
+END=83000
+title=ion share: heat decides the ion
+
+[CHAPTER]
+TIMEBASE=1/1000
+START=83000
+END=101000
+title=place is lost, speed is kept
+
+[CHAPTER]
+TIMEBASE=1/1000
+START=101000
+END=111000
+title=amount: deeper, then only wider
+
+[CHAPTER]
+TIMEBASE=1/1000
+START=111000
+END=121000
+title=metals: an ingredient, not the switch
+
+[CHAPTER]
+TIMEBASE=1/1000
+START=121000
+END=146000
+title=sharpness and noise
+
+[CHAPTER]
+TIMEBASE=1/1000
+START=146000
+END=168000
+title=how much and how fast, not where
+
+[CHAPTER]
+TIMEBASE=1/1000
+START=168000
+END=176000
+title={{$url}}
+

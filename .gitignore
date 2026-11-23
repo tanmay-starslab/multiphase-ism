@@ -1,0 +1,37 @@
+__pycache__/
+*.pyc
+*.aux
+*.log
+*.out
+.ipynb_checkpoints/
+.DS_Store
+.serena/
+.pytest_cache/
+# TNG50 explorer: local build outputs (data lives on /Volumes/cgm_work, never in the repo)
+space_build/
+scratch/
+*.ewah
+config.tri
+yt.toml
+# generated sightlines / cutouts / secrets, wherever TNG_LIBRARY_DIR etc. point
+# (add a `!path/to/fixture.npz` exception here if a fixture is ever needed)
+*.npz
+!grids/*.npz
+*.h5
+*.hdf5
+generated/
+.env
+.claude/
+# Phase-2b 3D cubes: hosted on the public HF dataset tanmay-starslab/tng50-sub488530-viz, never in git.
+# Only docs/tng50/data/viz/manifest_v2.json is tracked; the Phase-2 volumes are gone (design-2b §6.4).
+docs/tng50/data/vol/
+docs/tng50/data/viz/*/
+
+# HyperFrames render state (machine-local paths, lock dirs); never commit
+.hyperframes/
+
+# Cloudflare build output (scripts/build_site.mjs)
+dist/
+.wrangler/
+logs/
+build_L012/

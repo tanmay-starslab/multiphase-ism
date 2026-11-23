@@ -1,0 +1,292 @@
+/* v2 stage shell: one pinned full-viewport stage, no document scroll (DESIGN §2.1, §8; DESIGN_final §3.2-3.3, §5.6).
+   Tokens and fonts come from css/story.css. Every label the solver places (js/ui/layout.js) is position:absolute at 0,0 and
+   moved by transform only; nothing here sizes a placed box (the solver's box is the drawn box, G1). Only opacity and transform
+   animate; the focus pull cross-fades a pre-blurred copy (no animated filter, DESIGN_final P1-6). */
+
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;background:var(--sky);-webkit-text-size-adjust:100%}
+body{color:var(--sky-ink);font:400 16px/1.5 var(--sans);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+button{font:inherit;color:inherit}
+a{color:var(--accent)}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.vh{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* ---- the stage and its layers (z order DESIGN §2.1) ---- */
+#stage{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;overflow:hidden;background:var(--sky);contain:strict;
+  touch-action:pinch-zoom;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+#stage>*{position:absolute;inset:0}
+#gl{width:100%;height:100%;display:block;z-index:0}
+#world{z-index:10;pointer-events:none;overflow:visible;width:100%;height:100%}
+#labels{z-index:20;pointer-events:none}
+#kinetic{z-index:30;pointer-events:none}
+#dock{z-index:40;pointer-events:none}
+#dock>*{pointer-events:auto}
+#hud{z-index:51;pointer-events:none}   /* above #rail: on phone landscape the menu and music buttons sit inside the rail band */
+#rail{z-index:50;inset:auto;left:0;top:0}
+#sheets{z-index:60;pointer-events:none}
+#sheets>*{pointer-events:auto}
+#labels>*,#kinetic>*,#hud>*{position:absolute;left:0;top:0;will-change:transform}
+#labels>*,#hud>*{pointer-events:auto}
+
+/* fallback scrims for no-GL paths (the 3D stage draws its own GL scrims; DESIGN_final §3.4) */
+#stage>.scrim-top,#stage>.scrim-bottom{position:absolute;left:0;right:0;pointer-events:none;z-index:5}
+#stage>.scrim-top{top:0;bottom:auto;height:12%;background:linear-gradient(180deg,rgba(4,5,10,.62),rgba(4,5,10,0))}
+#stage>.scrim-bottom{top:auto;bottom:0;height:40%;background:linear-gradient(0deg,rgba(4,5,10,.9),rgba(4,5,10,.55) 55%,rgba(4,5,10,0))}
+html:not(.no-gl-scrim) #stage>.scrim-top,html:not(.no-gl-scrim) #stage>.scrim-bottom{display:none}
+
+/* ---- kinetic type (DESIGN §8.3) ---- */
+.kt{transform-origin:50% 0;color:var(--sky-ink);text-shadow:0 1px 14px rgba(0,0,0,.55),0 0 2px rgba(0,0,0,.4)}
+.kt-c{display:block}
+.kt-blur{position:absolute;left:0;top:0;width:100%;filter:blur(9px)}
+.kt-l{display:block;white-space:nowrap}
+.kt-d{display:block;font:400 var(--dpx)/1.08 var(--serif);letter-spacing:-.01em;font-optical-sizing:auto}
+.kt-d em{font-style:italic;color:var(--phase-hue)}
+.kt-s{display:block;font:400 var(--spx)/1.45 var(--sans);color:var(--sky-muted)}
+.kt-s em{font-style:normal;color:var(--sky-ink)}
+.kt-d+.kt-s{margin-top:calc(var(--dpx) * .45)}
+.kt-act .kt-d{letter-spacing:-.015em}
+.kt-subonly .kt-s{color:var(--sky-ink)}
+
+/* ---- HUD pills: solid, no backdrop-filter, at every tier (S0.md §5, frozen: blur cost +0.2-0.7 ms per frame on the A100,
+   about +1-3.5 ms on a 5x laptop, against a 0.5 ms allowance) ---- */
+.hud-pill,.hud-btn{display:inline-flex;align-items:center;gap:10px;height:44px;border-radius:22px;border:1px solid var(--pill-edge);
+  background:var(--pill);color:var(--sky-ink);cursor:pointer;padding:0 16px;white-space:nowrap;overflow:hidden;
+  transition:border-color .2s var(--ease-ui),background-color .2s var(--ease-ui)}
+.hud-btn{justify-content:center;width:44px;padding:0}
+.hud-btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
+.hud-pill:hover,.hud-btn:hover{border-color:color-mix(in srgb,var(--phase-hue) 55%,transparent)}
+.hud-pill:active,.hud-btn:active{transition-timing-function:var(--ease-press)}
+/* end hand-off (review SC-7): placed by the solver; row or column per its variant */
+#end-actions{display:flex;gap:8px;align-items:flex-start;box-sizing:border-box}
+#end-actions[data-mode=col]{flex-direction:column}
+#end-actions .end-s{display:none}
+#end-actions[data-mode=rowShort] .end-s{display:inline}
+#end-actions[data-mode=rowShort] .end-l{display:none}
+#end-actions[data-mode=wrap],#end-actions[data-mode=wrapTight]{flex-wrap:wrap;align-content:flex-start}
+#end-actions[data-mode=colTight]{flex-direction:column}
+#end-actions[data-mode=rowTight],#end-actions[data-mode=wrapTight],#end-actions[data-mode=colTight]{gap:4px}
+#end-actions[data-mode=wrap] .end-s,#end-actions[data-mode=rowTight] .end-s,#end-actions[data-mode=wrapTight] .end-s,#end-actions[data-mode=colTight] .end-s{display:inline}
+#end-actions[data-mode=wrap] .end-l,#end-actions[data-mode=rowTight] .end-l,#end-actions[data-mode=wrapTight] .end-l,#end-actions[data-mode=colTight] .end-l{display:none}
+#end-actions .end-a{box-sizing:border-box;justify-content:center;padding:0 16px;font:500 14px/1 var(--sans);color:var(--sky-ink);text-decoration:none;white-space:nowrap;cursor:pointer}
+#end-actions[data-mode$=Tight] .end-a{height:34px;padding:0 8px;font-size:13px}
+#end-actions .end-a:first-child{border-color:color-mix(in srgb,var(--phase-hue) 60%,transparent)}
+/* cloud letter chips (fix1, review M1): the shells and tethers carry their cloud's name */
+.cloud-chip{box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:13px;padding:0 10px;
+  font:500 12px/1 var(--sans);color:var(--sky-ink);background:var(--glass-solid,rgba(8,10,18,.82));border:1px solid var(--pill-edge);
+  pointer-events:none;white-space:nowrap}
+.cloud-chip[hidden]{display:none}
+#labels>.cloud-chip{pointer-events:none}
+.cloud-chip[data-ion=HI]{border-color:#8fb4ff}
+.cloud-chip[data-ion=OVI]{border-color:#ffb36b}
+#act-chip{font:500 14px/1 var(--sans);letter-spacing:.01em}
+#act-chip::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--phase-hue);box-shadow:0 0 10px var(--phase-hue);flex:none}
+#act-chip .act-l{overflow:hidden;text-overflow:ellipsis}
+#phase-pill{height:36px;border-radius:18px;padding:0 14px;font:400 13px/1 var(--sans);color:var(--sky-muted)}
+.ph-sw{display:inline-flex;gap:3px}
+.ph-sw i{display:block;width:9px;height:9px;border-radius:50%}
+#hint{display:flex;align-items:center;justify-content:center;height:40px;border-radius:20px;padding:0 18px;pointer-events:none;
+  font:400 14px/1 var(--sans);color:var(--sky-ink);background:rgba(8,10,20,.6);border:1px solid var(--glass-edge)}
+
+/* ---- rail: mini-map of the beam (DESIGN_final P1-2, P1-3) ---- */
+.rail>*{position:absolute}
+.rail-fly svg{width:18px;height:18px;fill:currentColor;stroke:none}
+.rail-fly .i-pause,.rail-fly.watch:not(.paused) .i-fly{display:none}
+.rail-fly.watch:not(.paused) .i-pause{display:inline}
+.rail-fly.on{border-color:var(--beam);color:var(--beam);box-shadow:0 0 0 3px color-mix(in srgb,var(--beam) 22%,transparent)}
+.rail-track{cursor:pointer;outline-offset:-2px;border-radius:8px}
+.rail-svg{position:absolute;left:0;right:0;top:50%;height:20px;margin-top:-10px;width:100%;overflow:visible}
+.rail-base{fill:rgba(236,240,255,.22)}
+.rail-tick{fill:rgba(236,240,255,.45)}
+.rail-subtick{fill:var(--beam)}
+.rail-fill{fill:var(--beam)}
+.rail-band{opacity:.85}
+.rail-band.ph-cold{fill:var(--cold)}.rail-band.ph-warm{fill:var(--warm)}.rail-band.ph-hot{fill:var(--hot)}.rail-band.ph-hi{fill:var(--hi)}.rail-band.ph-ovi{fill:var(--ovi)}
+.rail-track::after{content:"";position:absolute;top:50%;left:calc(var(--p,0) * 100%);width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+  background:var(--beam);box-shadow:0 0 12px 2px var(--beam-glow)}
+.rail-sub{position:absolute;right:0;top:3px;font:400 12px/1 var(--mono);color:var(--beam);white-space:nowrap}
+.rail-tip{position:absolute;bottom:100%;transform:translateX(-50%);margin-bottom:6px;padding:6px 9px;border-radius:8px;white-space:nowrap;
+  font:400 12px/1.2 var(--mono);color:var(--sky-ink);background:var(--glass-solid);border:1px solid var(--glass-edge);pointer-events:none}
+.rail-odo{font:400 var(--mono-px,12px)/1.5 var(--mono);color:var(--sky-muted);white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+.rail-odo:focus-visible::after,.rail-odo:hover::after{content:attr(title);position:absolute;right:0;bottom:100%;margin-bottom:6px;padding:6px 9px;border-radius:8px;
+  white-space:nowrap;background:var(--glass-solid);border:1px solid var(--glass-edge);color:var(--sky-ink)}
+
+/* ---- plaque: moving label, so no glass (DESIGN §8.4) ---- */
+.plaque{padding:5px 10px 6px;border-left:2px solid var(--phase-hue);background:rgba(4,5,10,.72);border-radius:0 8px 8px 0;
+  font:400 var(--mono-px,12px)/1.4 var(--mono);color:var(--sky-ink);font-variant-numeric:tabular-nums}
+.pl-row{display:flex;gap:1ch;white-space:nowrap}
+.pl-k{color:var(--sky-muted);min-width:5ch}
+.pl-plain{font:400 max(12px,calc(var(--mono-px,12px) - 1px))/1.35 var(--sans);color:var(--sky-muted);margin:0 0 2px 6ch;white-space:nowrap}
+
+/* ---- menu sheet (modal layer) ---- */
+#menu-sheet{position:absolute;right:max(12px,var(--sar));top:calc(64px + var(--sat));min-width:248px;max-width:calc(100vw - 24px);padding:6px;
+  border-radius:16px;background:var(--glass-solid);border:1px solid var(--glass-edge);box-shadow:0 24px 60px rgba(0,0,0,.55)}
+[data-layout="phoneLandscape"] #menu-sheet{top:auto;bottom:calc(56px + var(--sab));left:max(12px,var(--sal));right:auto}
+.mn-i{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;min-height:44px;padding:9px 12px;border:0;border-radius:10px;
+  background:none;color:var(--sky-ink);text-align:left;cursor:pointer;text-decoration:none}
+.mn-i:hover,.mn-i:focus-visible{background:rgba(236,240,255,.07)}
+.mn-l{font:500 15px/1.2 var(--sans)}
+.mn-h{font:400 12px/1.2 var(--sans);color:var(--sky-muted)}
+.mn-i[aria-checked="true"] .mn-l::after{content:"  on";color:var(--beam);font-weight:400}
+/* picker: Try another beam */
+.pk{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(480px,calc(100vw - 24px));max-height:min(640px,calc(100dvh - 24px));
+  display:flex;flex-direction:column;padding:16px 20px 18px;border-radius:16px;background:var(--glass-solid);border:1px solid var(--glass-edge);
+  color:var(--sky-ink);box-shadow:0 24px 60px rgba(0,0,0,.55)}
+.pk-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.pk h2{margin:0;font:500 17px/1.2 var(--sans)}
+.pk-s input{width:100%;box-sizing:border-box;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--glass-edge);
+  background:rgba(236,240,255,.04);color:var(--sky-ink);font:400 15px/1 var(--sans)}
+.pk-list{overflow:auto;margin:10px -6px 0;padding:0 6px;flex:1 1 auto;min-height:88px}
+.pk-gl{font:500 12px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--sky-muted);margin:12px 0 6px}
+.pk-o{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:8px 12px;border-radius:10px;cursor:pointer}
+.pk-o:hover,.pk-o:focus-visible{background:rgba(236,240,255,.07)}
+.pk-o[aria-selected="true"] .pk-l{color:var(--beam)}
+.pk-o[aria-disabled="true"]{cursor:default;color:var(--sky-muted)}
+.pk-l{font:400 15px/1.25 var(--sans)}.pk-t{font:400 12px/1.2 var(--sans);color:var(--sky-muted);text-align:right}
+.pk-foot,.pk-none{margin:12px 0 0;font:400 13px/1.45 var(--sans);color:var(--sky-muted)}
+.pk-foot a{color:#a9bbff}
+.pk-c{align-items:flex-start}.pk-ct{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 auto}
+.pk-im{flex:none;width:56px;height:38px;margin-top:2px;border-radius:6px;object-fit:cover;background:#0b0e19;border:1px solid var(--glass-edge)}
+.pk-b{font:400 13px/1.35 var(--sans);color:var(--sky-muted)}.pk-c .pk-t{padding-top:2px;white-space:nowrap}
+/* short or narrow screens (260 px at 150 %): the whole dialog scrolls instead of the list; narrow rows stack their tag */
+@media (max-width:340px),(max-height:420px){.pk{overflow:auto}.pk-list{flex:none;overflow:visible;min-height:0}}
+@media (max-width:340px){.pk{padding:12px 14px 14px}.pk-o{flex-direction:column;align-items:flex-start;gap:2px;padding:8px}
+  .pk-t,.pk-c .pk-t{text-align:left;padding-top:0}.pk-im{display:none}}
+/* key help (DESIGN §9.3) */
+.kh{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,calc(100vw - 24px));max-height:calc(100dvh - 24px);
+  overflow:auto;padding:16px 20px 20px;border-radius:16px;background:var(--glass-solid);border:1px solid var(--glass-edge);color:var(--sky-ink);
+  box-shadow:0 24px 60px rgba(0,0,0,.55)}
+.kh-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.kh h2{margin:0;font:500 17px/1.2 var(--sans)}
+.kh dl{display:grid;grid-template-columns:auto 1fr;gap:10px 16px;margin:0;font:400 14px/1.35 var(--sans)}
+.kh dt{white-space:nowrap}.kh dd{margin:0;color:var(--sky-muted)}
+.kh kbd{display:inline-block;min-width:24px;padding:3px 6px;border-radius:6px;border:1px solid var(--glass-edge);font:400 12px/1 var(--mono);text-align:center}
+
+/* ---- narrative: always in the DOM for screen readers; "Read as text" shows it (the overlay scrolls, the page never does) ---- */
+#text-overlay{position:fixed;z-index:70;inset:0;overflow:auto;overscroll-behavior:contain;background:rgba(4,5,10,.96);color:var(--sky-ink)}
+#text-overlay:not([data-open]){position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);border:0}
+.to-in{max-width:680px;margin:0 auto;padding:calc(28px + var(--sat)) 22px calc(48px + var(--sab))}
+.to-in header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 16px;margin-bottom:12px}
+.to-in header .hud-pill{flex:none}
+.to-in h1,.to-in h2{font:400 clamp(28px,4vw,40px)/1.1 var(--serif);margin:0}
+#narrative{margin:0;padding:0 0 0 1.4em;font:400 17px/1.6 var(--sans)}
+#narrative>li{margin:0 0 18px}
+#narrative>li[aria-current]{color:var(--beam)}
+#narrative p{margin:0 0 6px}
+.nv-go{min-height:44px;padding:0 12px;border-radius:10px;border:1px solid var(--glass-edge);background:none;color:var(--accent);cursor:pointer}
+.nv-honest ul{padding-left:1.2em;color:var(--sky-muted)}
+.skip{position:fixed;z-index:80;left:12px;top:12px;padding:10px 12px;border-radius:10px;background:var(--glass-solid);color:var(--sky-ink);
+  border:1px solid var(--glass-edge);font:500 13px/1 var(--sans);text-decoration:none;transform:translateY(-200%)}
+.skip:focus{transform:none}
+
+/* ---- motion and transparency preferences ---- */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition-duration:0s!important;animation-duration:0s!important;animation-iteration-count:1!important}
+  .kt-blur{display:none}
+}
+html.reduced .kt-blur{display:none}
+@media (prefers-reduced-transparency:reduce){
+  .hud-pill,.hud-btn,.plaque,#hint{background:var(--glass-solid)}
+}
+@media (forced-colors:active){.hud-pill,.hud-btn,.plaque{border:1px solid CanvasText}}
+
+/* review perf M4: screen-reader-only text (the dock description) */
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* review2 three_d T4: the resting colour key inside the act chip (swatches, optional "cells only" note) */
+#act-chip .act-sw{display:inline-flex;align-items:center;gap:2px;margin-left:10px;flex:none}
+#act-chip .act-sw[hidden]{display:none}
+#act-chip .act-sw i{display:block;width:8px;height:8px;border-radius:50%;box-shadow:0 0 0 1px #ffffff2e}
+#act-chip .act-note{margin-left:6px;font-size:13px;font-weight:400;color:rgba(236,240,255,0.78);white-space:nowrap}
+
+/* music switch (owner 2026-11-16; js/ui/sound.js keeps the logic and sets aria-checked): "Music" and a glass track whose
+   liquid-metal knob (the note) stretches like a drop as it slides (the leading edge moves first, the trailing edge follows);
+   on, the track fills with a warm glow and three sound bars play under the knob. The same switch sits on the gate and in the
+   HUD pill (whose width hud.js soundWidth fixes; the knob carries the icon so it fits). No backdrop-filter (S0 §5). */
+.msw{--tw:36px;--th:22px;--k:18px;--warm:#ffc978;--ease-l:cubic-bezier(.32,.72,.28,1);-webkit-tap-highlight-color:transparent}
+.msw-l{white-space:nowrap}
+.msw-t{position:relative;flex:none;width:var(--tw);height:var(--th);border-radius:999px;overflow:hidden;
+  background:linear-gradient(180deg,rgba(236,240,255,.16),rgba(236,240,255,.05) 60%),rgba(12,16,28,.7);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.6),inset 0 0 0 1px rgba(255,255,255,.13),0 1px 0 rgba(255,255,255,.05);
+  transition:box-shadow .45s var(--ease-l)}
+.msw-t::before{content:"";position:absolute;inset:0;border-radius:inherit;opacity:0;transition:opacity .45s var(--ease-l);
+  background:radial-gradient(130% 160% at 18% 50%,rgba(255,222,164,.85),rgba(255,170,96,.55) 55%,rgba(232,120,60,.3)),linear-gradient(180deg,rgba(255,255,255,.25),transparent 55%)}
+.msw-t::after{content:"";position:absolute;left:12%;right:12%;top:1px;height:40%;border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.22),transparent);pointer-events:none}
+.msw[aria-checked="true"] .msw-t{box-shadow:inset 0 1px 2px rgba(90,36,0,.45),inset 0 0 0 1px rgba(255,214,160,.6),0 0 16px -3px rgba(255,176,96,.75)}
+.msw[aria-checked="true"] .msw-t::before{opacity:1}
+.msw-k{position:absolute;z-index:1;top:2px;bottom:2px;left:2px;right:calc(100% - 2px - var(--k));border-radius:999px;display:grid;place-items:center;
+  background:radial-gradient(120% 120% at 34% 26%,#fff 0 10%,#e6eaf2 30%,#a9b1c2 72%,#7a8295);color:#4d5466;
+  box-shadow:0 1px 3px rgba(0,0,0,.55),inset 0 -1px 1.5px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.95);
+  transition:left .34s var(--ease-l),right .34s var(--ease-l) .09s,transform .3s var(--ease-l),color .4s}
+.msw[aria-checked="true"] .msw-k{left:calc(100% - 2px - var(--k));right:2px;color:#8a4310;
+  background:radial-gradient(120% 120% at 34% 26%,#fffdf7 0 10%,#ffe9c2 30%,#ffc56f 70%,#e48d3a);
+  box-shadow:0 1px 3px rgba(80,30,0,.5),0 0 10px rgba(255,190,110,.6),inset 0 -1px 1.5px rgba(120,50,0,.25),inset 0 1px 0 #fff;
+  transition:left .34s var(--ease-l) .09s,right .34s var(--ease-l),transform .3s var(--ease-l),color .4s}
+.msw-k svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;overflow:visible}
+.msw-k circle{fill:currentColor;stroke:none}
+.msw:active .msw-k{transform:scale(1.1,.86)}
+.msw-bars{position:absolute;left:7px;top:0;bottom:0;display:flex;align-items:center;gap:2px;opacity:0;transition:opacity .35s}
+.msw-bars i{display:block;width:2px;height:11px;border-radius:1px;background:#fff;box-shadow:0 0 4px rgba(255,240,210,.8);transform:scaleY(.55)}
+.msw-bars i:nth-child(2){transform:scaleY(1)}
+.msw[aria-checked="true"] .msw-bars{opacity:1}
+.msw:focus-visible{outline:2px solid var(--accent,#8fa8ff);outline-offset:3px}
+@media (prefers-reduced-motion:no-preference){
+  html:not(.reduced) .msw[aria-checked="true"] .msw-bars i{animation:mswbar .9s ease-in-out infinite alternate}
+  html:not(.reduced) .msw[aria-checked="true"] .msw-bars i:nth-child(2){animation-duration:.7s;animation-delay:-.35s}
+  html:not(.reduced) .msw[aria-checked="true"] .msw-bars i:nth-child(3){animation-duration:1.1s;animation-delay:-.6s}
+}
+@keyframes mswbar{from{transform:scaleY(.3)}to{transform:scaleY(1)}}
+@media (prefers-reduced-motion:reduce){.msw-k,.msw[aria-checked="true"] .msw-k,.msw-t,.msw-t::before,.msw-bars{transition:none}.msw:active .msw-k{transform:none}}
+html.reduced .msw-k,html.reduced .msw[aria-checked="true"] .msw-k,html.reduced .msw-t::before{transition:none}
+/* HUD pill: label left, switch right, inside the width soundWidth gives; phones (44 px) show the switch alone */
+.snd.msw{padding:0 10px 0 14px;gap:10px;justify-content:space-between}
+.snd.msw[aria-checked="false"]{color:var(--sky-muted)}
+/* on, waiting for the first click (a browser that blocks sound on a new page): the bars rest and the track breathes */
+html:not(.reduced) .msw[data-wait="1"] .msw-bars i{animation:none}
+.msw[data-wait="1"] .msw-bars{opacity:.55}
+html:not(.reduced) .msw[data-wait="1"] .msw-t::before{animation:mswwait 1.8s ease-in-out infinite alternate}
+@keyframes mswwait{from{opacity:.55}to{opacity:1}}
+.snd.msw[aria-checked="true"]{border-color:color-mix(in srgb,var(--warm) 55%,transparent);color:var(--sky-ink)}
+.snd.icon{padding:0;justify-content:center}
+.snd.icon .msw-l{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+/* gate: a glass pill beside Skip intro and Read as text */
+.sg-sw{--tw:40px;--th:24px;--k:20px;display:inline-flex;align-items:center;gap:12px;min-height:44px;padding:0 10px 0 16px;border-radius:22px;cursor:pointer;
+  border:1px solid rgba(236,240,255,.2);color:var(--sky-ink);font:500 14px/1 var(--sans);
+  background:radial-gradient(120% 90% at 50% 0%,rgba(255,255,255,.1),transparent 62%),#0b0f1cc7;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 6px 18px -8px rgba(0,0,0,.6);transition:border-color .3s,box-shadow .45s}
+.sg-sw:hover{border-color:rgba(255,232,196,.5)}
+.sg-sw[aria-checked="true"]{border-color:rgba(255,214,160,.55);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 0 24px -6px rgba(255,176,96,.55)}
+.sg-sw .msw-bars{left:8px;gap:2.5px}
+.sg-k{align-items:center}
+.to-cr{margin:2.5em 0 0;font:400 13px/1.5 var(--sans);color:var(--sky-muted)}
+.to-cr a{color:inherit}
+.msw{--snd-accent:#ffc978}
+/* while the reader has not chosen yet (sound.js "invite"): a warm ring and a slow glow, three times, then it rests lit */
+.msw.invite{border-color:color-mix(in srgb,var(--snd-accent) 70%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--snd-accent) 15%,transparent)}
+.msw.invite .msw-k{color:#8a5a20}
+@media (prefers-reduced-motion:no-preference){
+  html:not(.reduced) .msw.invite{animation:sndinvite 2.6s ease-in-out 1.2s 3}
+}
+@keyframes sndinvite{50%{box-shadow:0 0 0 7px color-mix(in srgb,var(--snd-accent) 8%,transparent),0 0 22px color-mix(in srgb,var(--snd-accent) 35%,transparent)}}
+/* credits ID badge (hud:badge, placed by the solver; js/ui/hud.js badgeSizes): sim, subhalo and redshift as separate spans,
+   one 36 px row or two lines on a 44 px chip; opens Data and credits */
+.idb{height:36px;border-radius:18px;padding:0 12px;gap:8px;font:400 13px/1 var(--sans);color:var(--sky-muted)}
+.idb .idb-g{font-weight:500;color:var(--sky-ink)}
+.idb[data-mode=stack]{height:44px;border-radius:14px;padding:0 10px;display:inline-grid;grid-template-columns:auto auto;column-gap:6px;row-gap:3px;
+  align-content:center;justify-content:center;font-size:12px}
+.idb[data-mode=stack] .idb-g{grid-column:1/-1;grid-row:2;text-align:center}
+.idb:focus-visible{outline:2px solid var(--beam);outline-offset:2px}
+/* Data and credits dialog: the key-help card, wider, with readable body text */
+.cr{width:min(520px,calc(100vw - 24px))}
+/* laptops and wider: Data and credits slides in as a side panel on the right, like the explorer's, leaving the story visible */
+/* laptops and wider: every sheet (Data and credits, Keys and help, Try another beam) is the same right-hand side panel,
+   full height, so the story stays visible on the left (owner 2026-11-13: consistent placement) */
+@media (min-width:900px){
+  .kh,.pk{left:auto;right:16px;top:16px;bottom:16px;transform:none;width:min(460px,38vw);max-height:none;overflow:auto}
+  .pk{overflow:hidden}   /* the picker scrolls its own list (.pk-list), header and search stay put */
+}
+.cr h3{margin:14px 0 4px;font:500 14px/1.2 var(--sans);letter-spacing:.02em;color:var(--sky-ink)}
+.cr p{margin:0 0 8px;font:400 14px/1.55 var(--sans);color:var(--sky-muted)}
+.cr p.cr-ack{font-size:12.5px;line-height:1.5}
+.cr a{color:#a9bbff;overflow-wrap:anywhere}
+

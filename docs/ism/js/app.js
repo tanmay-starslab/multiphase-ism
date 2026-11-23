@@ -1,0 +1,1495 @@
+// TNG50 explorer page (Phase 3): the orchestration module loaded by docs/tng50/_template.html. It owns the state
+// (design §6.3), the catalogue, sightline loading, the sightline servers and generation jobs, the popovers, the ion
+// selector, the layout, the on-the-fly fits (js/fitworker.js, design §5.5), the 3D tab and its live thumbnail
+// (js/viewer3d.js), Find (js/search.js), Ask (js/chat.js) and the window.tngApp v3 bridge (§6.5).
+// Rendering is in spectra.js, the instrument sliders in instrument.js, the sightline picker in gallery.js and the
+// pure state (hash, slider maps, validation) in state.js.
+import {makeRegistry, cloneState, casesFor, bandsOf, clampView, parseHash, formatHash, instrumentPatch, ID_RE, LAYOUTS,
+  fmtR, fmtNum, minus, nf, annotateLimits, fitClass, fitLimits} from "./state.js";
+import {createSpectra} from "./spectra.js";
+import {createGallery, kindOf, nShow, sightLabel, sightTip, copyText} from "./gallery.js";
+import {createInstrument} from "./instrument.js";
+import * as FITM from "./fit.js";
+import {initTips, ION_TIPS} from "./tips.js";
+import {initFeatures} from "./features.js";   /* ux4 features: share, keys, random, undo, solo, CSV, loading */
+import {initLiquidTabs, initLiquidSeg, initLiquidButtons} from "./liquidtabs.js";   /* CSS-only liquid drop (tabs, segmented rows) and glossy top-bar buttons */
+import {initLiquidBg} from "./liquidbg.js";   /* liquid metal shader background (3D tab; Spectra only with SPECTRA_BG) */
+import {uiSound, sfx} from "./uisound.js";   /* optional UI sound effects (off by default; top-bar switch #sfx) */
+import {galaxyIndex, resolveGalaxy, parseGalaxy, galaxyHashPart, packFor, createGalaxyPicker, galaxyTip, unlistedGalaxy,
+  nearestSightline, defaultSightline, srcOf, galaxySummary, normId, isFire} from "./galaxies.js";
+import {tier, tierReady} from "./tier.js";   /* perf R5: device tier (html[data-tier]) and its one-off WebGL probe */
+const {degradeV, decodeTNGS, seedFor, cacheKey, fitPanel, FIT_VERSION, FIT_PARAMS} = FITM;
+
+/* ---------------- config ---------------- */
+const CFG = Object.assign({
+  version: 3, catalog_url: "data/catalog.json", bin_dir: "data/s/", backends: ["http://127.0.0.1:8787"],
+  galaxy: {sim: "TNG50-1", snapshot: 99, redshift: 0, subhalo_id: 488530}, ions: [], bands: {}, snr: {min: 2, max: 100, default: 10, pair: [20, 5]},
+  defaults: {id: "edge_b100_a090"}, viz: null, components_url: "data/components.json", three: "0.169.0", js_base: "js/",
+  chat: {enabled: false}, custom: {r_max_kpc: 395, l_min_kpc: 20, l_max_kpc: 800}, fitter: {worker: "js/fitworker.js", version: "fit/1"}
+}, window.TNG_DATA || {});
+const reg = makeRegistry(CFG), {ION} = reg;
+/* galaxy sample (js/galaxies.js): GIX is the picker index (null with one galaxy: no picker, nothing changes), GAL the
+   galaxy shown. The default galaxy reads the legacy data/ paths (LEGACY); any other galaxy its pack (packFor), and the
+   sightline server is asked with ?galaxy=<id> only when its /api/health says it serves several galaxies (health.galaxies) */
+const GIX = galaxyIndex(CFG);
+const LEGACY = {catalog_url: CFG.catalog_url, bin_dir: CFG.bin_dir, components_url: CFG.components_url, components_dir: CFG.components_dir, viz: CFG.viz, frame: CFG.frame,
+  galaxy: CFG.galaxy, n_static: CFG.n_static};
+let GAL = GIX ? resolveGalaxy(GIX, location.hash, location.search) : (CFG.galaxy && CFG.galaxy.subhalo_id != null ? normId(CFG.galaxy.subhalo_id) : null);
+const isDefGal = () => !GIX || GAL === GIX.default;
+function applyPack(pack, gj) {
+  Object.assign(CFG, {catalog_url: pack.catalog_url, bin_dir: pack.bin_dir, components_url: pack.components_url, viz: pack.viz,
+    components_dir: pack.legacy ? LEGACY.components_dir : null});   /* per-sightline slices: the default galaxy's built site only */
+  if (pack.legacy) Object.assign(CFG, {frame: LEGACY.frame, galaxy: LEGACY.galaxy, n_static: LEGACY.n_static});
+  else { const e = GIX.byId.get(pack.id) || {}, g = gj || {};
+    CFG.galaxy = {sim: g.sim || e.sim || "TNG50-1", snapshot: g.snapshot ?? 99, redshift: g.redshift ?? 0, subhalo_id: pack.id, central: g.central ?? e.central,
+      R200c_kpc: g.R200c_kpc ?? e.R200c, M200c_Msun: g.M200c_Msun ?? e.M200c, Mstar_Msun: g.Mstar_Msun ?? e.Mstar, SFR_Msun_yr: g.SFR_Msun_yr ?? e.SFR};
+    CFG.frame = g.Lhat ? {Lhat: g.Lhat, xhat: g.xhat, yhat: g.yhat, R200c_kpc: g.R200c_kpc ?? e.R200c} : {R200c_kpc: e.R200c};   /* the manifest's frame wins in viewer3d */
+    CFG.n_static = e.n || 0; }
+  CFG_SNAP = null;
+}
+let CFG_SNAP = null;
+const cfgSnap = () => (CFG_SNAP ||= Object.freeze(JSON.parse(JSON.stringify({...CFG, galaxy_id: GAL}))));
+async function galaxyJson(pack) { if (!pack.galaxy_url) return null;
+  try { const r = await fetch(pack.galaxy_url); return r.ok ? await r.json() : null; } catch { return null; } }
+let GAL_READY = Promise.resolve();
+if (GIX && !isDefGal()) { const pk = packFor(GIX, GAL, LEGACY); applyPack(pk, null); GAL_READY = galaxyJson(pk).then(gj => { if (gj && GAL === pk.id) applyPack(pk, gj); }); }
+/* the shown galaxy's spectra provenance (galaxy-sample spec revision: "shown on the page, never hidden"): the pack
+   catalogue's spectra_source block, else the default galaxy's Trident library (review2 P2, ux P1-P3) */
+const TRIDENT_SRC = {source: "trident", label: "Trident (HM2012)", short: "Trident HM2012", path: "+-R200c",
+  text: "Spectra from Trident on yt (HM2012 metal-ion table; H I from the TNG neutral fraction), sightlines +-R200c long on a fixed 683-ray design grid (a designed, not random, sample). The 3D cubes use the same ion model."};
+let SRC = CFG.spectra_source || TRIDENT_SRC, GFLAGS = {};
+function setSource(cat) { SRC = (cat && cat.spectra_source) || CFG.spectra_source || TRIDENT_SRC; GFLAGS = (cat && cat.galaxy) || {}; sourceUI(); }
+const galSrv = () => isDefGal() || !!(HEALTH && HEALTH.galaxies);
+const SRV = () => (API && galSrv() ? API : null);
+const gq = u => (isDefGal() ? u : u + (u.includes("?") ? "&" : "?") + "g=" + GAL);
+const idbKey = id => (isDefGal() ? id : GAL + ":" + id);
+const STAGES = ["queued", "load", "ray", "spectra", "fit", "save"];
+const C_KMS = 299792.458;
+
+/* ---------------- helpers ---------------- */
+const $ = s => document.querySelector(s), $$ = s => Array.from(document.querySelectorAll(s));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const emit = (name, detail) => dispatchEvent(new CustomEvent(name, {detail}));
+/* column densities at the ion tables' floor (Mg II 10^0.5 in gas-poor halos) mean "nothing": shown as an upper bound */
+const LOGN_FLOOR = 10;
+const fmtLogN = v => (v < LOGN_FLOOR ? `< ${LOGN_FLOOR}` : fmtNum(v, 1));
+const store = {get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* storage blocked */ } }};
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const fb = x => Number.isInteger(+x) ? String(+x) : fmtNum(+x, 1);
+const isDark = () => getComputedStyle(document.documentElement).getPropertyValue("--scheme").trim() === "dark";
+const ionColor = k => ION[k] ? (isDark() ? ION[k].color_dark : ION[k].color) : "#888";
+const modUrl = f => new URL(`${CFG.js_base}${f}?v=${CFG.registry_tag || "20261122"}-2`, location.href).href;
+const strip = e => { const o = {}; for (const k in e) if (k[0] !== "_") o[k] = e[k]; return o; };
+const debounce = (f, ms) => { let t = 0; return (...a) => { clearTimeout(t); t = setTimeout(() => f(...a), ms); }; };
+
+/* ---------------- state ---------------- */
+const S = Object.assign(cloneState(reg.DEF), {id: null});
+const CAT = new Map();          // id -> catalogue entry (+ _static, _seq)
+let SEQ = 0, CATV = 0, catEmitted = -1;
+const SIGHT = new Map();        // id -> decoded TNGS (fit.js decodeTNGS)
+let API = null, HEALTH = null, PROBES = [], pendingId = null;
+
+/* ---------------- theme ---------------- */
+/* owner 2026-11-16: every click must change what is on screen. The old 3-step cycle auto, light, dark had one step with
+   no visible change (auto already shows light or dark), so it needed a second click. Now "auto" (follow the system) is
+   only the starting state; a click always switches to the opposite of what is shown, and the choice is remembered. */
+const THEMES = ["auto", "light", "dark"];
+let theme = THEMES.includes(store.get("tngsight.theme")) ? store.get("tngsight.theme") : "auto";
+const shown = t => (t === "auto" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : t);
+function applyTheme(t) { if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  const b = $("#theme"), cur = shown(t), nx = cur === "dark" ? "light" : "dark"; b.dataset.mode = t;
+  b.setAttribute("aria-label", `Theme: ${cur}${t === "auto" ? " (system)" : ""}. Switch to ${nx}`);
+  b.dataset.tip = `${cur === "dark" ? "Dark" : "Light"} theme${t === "auto" ? ", following your system" : ""}; click for ${nx}`; }
+applyTheme(theme);
+$("#theme").addEventListener("click", () => { theme = shown(theme) === "dark" ? "light" : "dark"; store.set("tngsight.theme", theme); applyTheme(theme); });
+function themeChanged() { buildIons(); build3dField(); spectra.schedule(); }
+new MutationObserver(() => themeChanged()).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { applyTheme(theme); themeChanged(); });
+
+/* ---------------- notes and status ---------------- */
+let noteT = 0;
+function note(t, cls = "") { const n = $("#note"); n.textContent = t || ""; n.className = cls; clearTimeout(noteT); if (t) noteT = setTimeout(() => { n.textContent = ""; }, 8000); }
+function geomsg(t, cls = "", code = "info") { const m = $("#geomsg"); m.className = "msg " + cls; m.textContent = t; m.dataset.code = code;
+  if (cls === "good") sfx("success"); else if (cls === "bad") sfx("error"); }   /* request outcomes echo the visible message */
+
+/* ---------------- catalogue ---------------- */
+function upsert(e, isStatic) { if (!e || !e.id || !ID_RE.test(e.id)) return;
+  const old = CAT.get(e.id), ne = Object.assign({}, old || {}, e);
+  ne._static = (old && old._static) || !!isStatic; ne._seq = old ? old._seq : ++SEQ; CAT.set(e.id, ne); CATV++; }
+function sorted() {
+  const lib = [], gen = [];
+  for (const e of CAT.values()) (e.source === "generated" ? gen : lib).push(e);
+  /* tune1 F11: library sightlines in a scannable order (face-on, edge-on, random; then b, azimuth, seed); this is also the
+     prev/next (j/k) order */
+  const OR = {"face-on": 0, "edge-on": 1, random: 2};
+  lib.sort((a, b) => (OR[a.orientation] ?? 3) - (OR[b.orientation] ?? 3) || (+a.b_kpc || 0) - (+b.b_kpc || 0) || (+a.azimuth_deg || 0) - (+b.azimuth_deg || 0) ||
+    (+a.seed || 0) - (+b.seed || 0) || (a.id < b.id ? -1 : 1));
+  gen.sort((a, b) => b._seq - a._seq);
+  return lib.concat(gen);
+}
+const gallery = createGallery({pop: $("#gal-pop"), cur: $("#gal-id"), search: $("#gal-search"), filter: $("#filter"), showcase: $("#showcase"), list: $("#gal-list"), count: $("#galcount")},
+  {entries: sorted, current: () => S.id, onPick: id => { closePops(); sfx("select"); select(id, false, "gallery"); }, libSource: () => srcOf(SRC)});
+function catalogChanged() { gallery.render(); if (CATV !== catEmitted) { catEmitted = CATV; emit("tng:catalog", {n: CAT.size}); } }
+function step(d) { const list = gallery.visible.length ? gallery.visible : sorted(); if (!list.length) return;
+  let i = list.findIndex(e => e.id === S.id); i = i < 0 ? 0 : (i + d + list.length) % list.length; sfx(d > 0 ? "forward" : "back"); select(list[i].id, false, "gallery"); }
+
+/* ---------------- IndexedDB cache for generated sightlines ---------------- */
+const IDB = (() => { let db = null, req = null, failed = false;
+  function open(ms) { if (db) return Promise.resolve(db); if (failed) return Promise.resolve(null);
+    if (!req) { try { req = indexedDB.open("tngsight", 1);
+        req.onupgradeneeded = () => req.result.createObjectStore("bins"); req.onsuccess = () => { db = req.result; }; req.onerror = () => { failed = true; };
+      } catch { failed = true; return Promise.resolve(null); } }
+    return new Promise(res => { const t = setTimeout(() => res(null), ms);
+      req.addEventListener("success", () => { clearTimeout(t); res(db); }); req.addEventListener("error", () => { clearTimeout(t); res(null); }); }); }
+  async function tx(mode, fn, ms = 3000) { const d = await open(ms); if (!d) return null; return new Promise(res => { try { const t = d.transaction("bins", mode), st = t.objectStore("bins");
+    const r = fn(st); t.oncomplete = () => res(r && "result" in r ? r.result : true); t.onerror = t.onabort = () => res(null); } catch { res(null); } }); }
+  return {get: id => tx("readonly", s => s.get(id)), put: (id, v) => tx("readwrite", s => s.put(v, id), 60000), all: () => tx("readonly", s => s.getAll())};
+})();
+
+/* ---------------- sightline data ---------------- */
+/* perf R5: the built site ships data/s/*.bin gzipped (scripts/build_site.mjs); gzip magic 1f 8b -> DecompressionStream, anything
+   else (the repository's raw files, a server's bins, an HTTP layer that already decoded) is used as is */
+async function fetchBin(url, ms = 20000) { const ac = new AbortController(), t = setTimeout(() => ac.abort(), ms);
+  try { const r = await fetch(url, {signal: ac.signal}); if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`); const b = await r.arrayBuffer(), u = new Uint8Array(b, 0, Math.min(2, b.byteLength));
+    return u[0] === 0x1f && u[1] === 0x8b ? await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer() : b; } finally { clearTimeout(t); } }
+/* B_fix R1: least-recently-used cache. A hit refreshes the entry, and the selected sightline is never evicted (a
+   neighbour prefetch used to drop it, leaving every panel on "loading"); concurrent loads of one id share a promise */
+const SIGHT_MAX = 30, SIGHT_LOAD = new Map(), SIGHT_FAIL = new Set();
+function putSight(id, s) { SIGHT.delete(id); SIGHT.set(id, s);
+  for (const k of SIGHT.keys()) { if (SIGHT.size <= SIGHT_MAX) break; if (k !== S.id && k !== id) SIGHT.delete(k); } }
+function getSight(id) {
+  if (SIGHT.has(id)) { const s = SIGHT.get(id); SIGHT.delete(id); SIGHT.set(id, s); return Promise.resolve(s); }
+  if (SIGHT_LOAD.has(id)) return SIGHT_LOAD.get(id);
+  const pr = loadSight(id).then(s => { SIGHT_FAIL.delete(id); return s; }, x => { SIGHT_FAIL.add(id); throw x; }).finally(() => SIGHT_LOAD.delete(id));
+  SIGHT_LOAD.set(id, pr); return pr;
+}
+/* a redraw that finds the selected sightline missing from the cache reloads it instead of drawing "loading" for ever */
+function ensureSight() { const id = S.id; if (!id || SIGHT.has(id) || SIGHT_LOAD.has(id) || SIGHT_FAIL.has(id) || !CAT.has(id)) return;
+  getSight(id).then(() => { if (id === S.id) { clampView(S, vmax()); inst.syncV(); buildIons(); draw(); } }, () => {}); }
+async function loadSight(id) {
+  const e = CAT.get(id); let buf = null, err = null;
+  if (e && e._static) { try { buf = await fetchBin(CFG.bin_dir + id + ".bin"); } catch (x) { err = x; } }
+  const g0 = GAL;
+  if (!buf) { const c = await IDB.get(idbKey(id)); if (c && c.bin) buf = c.bin; }
+  if (!buf && SRV()) { try { buf = await fetchBin(gq(`${API}/api/sightline/${id}.bin`)); if (e && !e._static) IDB.put(idbKey(id), {entry: strip(e), bin: buf, galaxy: GAL}); } catch (x) { err = x; backendFailed(); } }
+  if (!buf) throw err || new Error(`sightline ${id} is not in the static library and no server is online`);
+  if (g0 !== GAL) throw new Error("superseded by a galaxy switch");      /* never cache one galaxy's spectra under another's */
+  const s = decodeTNGS(buf, reg.KEYS.length ? reg.KEYS : null); putSight(id, s); return s;
+}
+const vSysOf = id => { const s = SIGHT.get(id); return s && Number.isFinite(s.vSys) ? s.vSys : +(CAT.get(id)?.v_sys) || 0; };
+/* B_fix m5: the window is in the systemic frame (V = u + vSys), so the reach is measured there: all the data can be
+   panned to, at the cost of a data-free strip on one side at the widest window when vSys is not zero */
+function lineW(id, k) { const L = SIGHT.get(id)?.lines[k]; if (L) { const vs = vSysOf(id); return Math.max(Math.abs(L.u0 + vs), Math.abs(L.u0 + (L.n - 1) * L.du + vs)); }
+  const w = CAT.get(id)?.W_kms?.[k]; return +w || 1500; }
+const vmaxFor = ions => Math.max(10, ...ions.map(k => lineW(S.id, k)));
+const vmax = () => vmaxFor(S.ions);
+const FIG_V_CAP = +(CFG.grid && CFG.grid.damped_v_max_kms) || 10000;   // the widest line window (damped H I)
+
+/* degraded data per panel: the full line, so cached fits never depend on the view window. C2 (code 7): least recently
+   used, capped by bytes rather than entries (a damped H I line at R 150,000 holds about 1 MB per entry); the entry
+   just stored always stays */
+const DG = new Map(), DG_MAX_BYTES = 64 * 1024 * 1024; let dgBytes = 0;
+const dgSize = d => [d.v, d.flux, d.model, d.sigma].reduce((s, a) => s + (a && a.byteLength || 0), 0);
+function dgPut(key, d) {
+  if (DG.has(key)) { dgBytes -= DG.get(key)._bytes; DG.delete(key); }
+  d._bytes = dgSize(d); DG.set(key, d); dgBytes += d._bytes;
+  for (const [k, e] of DG) { if (dgBytes <= DG_MAX_BYTES || k === key) break; DG.delete(k); dgBytes -= e._bytes; }
+}
+function caseRS(ion, ci) { const c = casesFor(S.layout)[ci] || [0, 0], band = ION[ion]?.band; return [S.R[band]?.[c[0]] ?? 0, S.sn[c[1]]]; }
+const panelSeed = (ion, ci) => seedFor(S.seed, ion, ci);
+function dataFor(ion, ci) {
+  const s = SIGHT.get(S.id); const L = s && s.lines[ion]; if (!L) return null;
+  const [R, sn] = caseRS(ion, ci), seed = panelSeed(ion, ci), key = `${S.id}|${ion}|${R}|${sn}|${seed}`;
+  let d = DG.get(key);
+  if (!d) { const vSys = vSysOf(S.id), o = degradeV(L, R, sn, vSys, {seed}); d = {v: o.v, flux: o.flux, model: o.model, sigma: o.sigma, dvp: o.v.length > 1 ? o.v[1] - o.v[0] : C_KMS / R / 5, line: L, vSys, R, sn, seed};
+    dgPut(key, d); }
+  else { DG.delete(key); DG.set(key, d); }
+  return d;
+}
+
+/* ---------------- components (static catalogue + server) ---------------- */
+const DEF_KEYS = ["v", "dv", "logN", "dlogN", "b", "db", "region", "flag", "EW"];
+const COMPRAW = new Map();      // id -> {keys, rows: {k: rows}, aod: {k: [total, regions]}, tag}
+let CIX = null, compMeta = {params_tag: null, fitter: null, params: null, comp_keys: DEF_KEYS};
+function normComps(obj, keys = DEF_KEYS, aod = null, tag = null) {   // rows or dict form -> raw rows store
+  if (!obj || typeof obj !== "object") return null;
+  const rows = {}, a = Object.assign({}, aod || obj.aod || {});
+  for (const [k, list] of Object.entries(obj)) { if (k === "aod" || !Array.isArray(list)) continue;
+    rows[k] = list.map(r => Array.isArray(r) ? r : keys.map(q => r[q] ?? (q === "region" ? 0 : q === "flag" ? 0 : null))); }
+  return {keys, rows, aod: a, tag};
+}
+/* C2 (owner decision 2): every catalogue a consumer sees (Find, Ask, tngApp.components) carries logN_lo on its lower
+   limits (state.js annotateLimits, from the region AOD in raw.aod), so search and chat present them as log N > x.
+   Memoised per raw store; tngApp.components hands out a copy. */
+const DICTS = new WeakMap();
+function dictsOf(raw) {
+  if (!raw) return null; let d = DICTS.get(raw);
+  if (!d) { d = annotateLimits(Object.fromEntries(Object.entries(raw.rows).map(([k, rows]) => [k, rows.map(r => Object.fromEntries(raw.keys.map((q, i) => [q, r[i]])))])), raw.aod);
+    DICTS.set(raw, d); }
+  return d;
+}
+const takeComps = (j, isStatic) => { const keys = j.comp_keys || DEF_KEYS;
+  if (isStatic || !compMeta.params_tag) compMeta = {params_tag: j.params_tag || null, fitter: j.fitter || null, params: j.params || null, comp_keys: keys};
+  for (const [id, c] of Object.entries(j.entries || {})) if (!COMPRAW.has(id) || isStatic) COMPRAW.set(id, normComps(c, keys, (j.aod || {})[id], j.params_tag)); };
+/* the whole catalogue (about 0.8 MB): only Find, Ask and a sightline without its own file (below) load it. perf R5: the
+   server's /api/components is asked only for what the static file lacks: rays cast on the server, or no static file */
+function componentsIndex() {
+  if (CIX) return CIX;
+  CIX = (async () => { let ok = false;
+    try { const r = await fetch(CFG.components_url); if (r.ok) { takeComps(await r.json(), true); ok = true; } } catch { /* offline file */ }
+    if (SRV() && (!ok || [...CAT.values()].some(e => !e._static))) try { const r = await fetch(gq(API + "/api/components")); if (r.ok) { takeComps(await r.json(), false); ok = true; } } catch { /* server optional */ }
+    if (!ok) { CIX = null; throw new Error("no components catalogue is available"); }
+    return {get params() { return compMeta.params; }, get fitter() { return compMeta.fitter; }, get params_tag() { return compMeta.params_tag; }, comp_keys: compMeta.comp_keys,
+      get entries() { return Object.fromEntries([...COMPRAW].map(([id, raw]) => [id, dictsOf(raw)])); },
+      get aod() { return Object.fromEntries([...COMPRAW].map(([id, raw]) => [id, raw.aod])); }}; })();
+  return CIX;
+}
+async function ensureComps(id) {
+  if (COMPRAW.has(id)) return COMPRAW.get(id); const e = CAT.get(id); if (!e) return null;
+  if (!e._static && SRV()) try { const r = await fetch(gq(`${API}/api/components/${encodeURIComponent(id)}.json`)); if (r.ok) { const j = await r.json();
+    const raw = normComps(j.components, j.comp_keys || DEF_KEYS, j.aod, j.params_tag); if (raw) { COMPRAW.set(id, raw); return raw; } } } catch { /* fall through */ }
+  /* perf R5: a library sightline's own few-kB slice of the catalogue (data/c/<id>.json, written by scripts/build_site.mjs and
+     announced by CFG.components_dir), so the fits of the first sightline never wait for the whole file */
+  if (e._static && CFG.components_dir && !CIX) try { const r = await fetch(CFG.components_dir + encodeURIComponent(id) + ".json");
+    if (r.ok) { takeComps(await r.json(), true); if (COMPRAW.has(id)) return COMPRAW.get(id); } } catch { /* fall back to the whole catalogue */ }
+  try { await componentsIndex(); } catch { return null; }
+  return COMPRAW.get(id) || null;
+}
+async function components(id) { const d = dictsOf(await ensureComps(id)); return d ? JSON.parse(JSON.stringify(d)) : null; }
+
+/* ---------------- fits (design §5.5) ---------------- */
+const NOCOMP = new Set();       // ids whose components could not be found (B_fix R7)
+const FIT = {res: new Map(), pend: new Map(), wait: new Map(), worker: null, mode: null, reqN: 0, t0: 0, last: "", queue: [], dog: 0};
+/* "none" while a sightline has no components, so a later catalogue never meets a cached "no seeds" result (B_fix R7) */
+const fitParamsTag = id => `${CFG.registry_tag || "reg"}${isDefGal() ? "" : "|g" + GAL}:${COMPRAW.has(id) ? COMPRAW.get(id)?.tag || compMeta.params_tag || "cat" : "none"}`;
+function fitIdent(ion, ci) { const [R, sn] = caseRS(ion, ci); return {id: S.id, ion, R, snr: sn, seed: panelSeed(ion, ci), paramsTag: fitParamsTag(S.id), ci}; }
+function putRes(key, r) { FIT.res.delete(key); FIT.res.set(key, r); while (FIT.res.size > (FIT_PARAMS.cacheSize || 256)) FIT.res.delete(FIT.res.keys().next().value); }
+function startWorker() {
+  if (FIT.mode) return;
+  try { const w = new Worker(modUrl("fitworker.js"), {type: "module"});
+    w.onmessage = ev => onFitMsg(ev.data);
+    /* B_fix R6: the moved requests stay in FIT.pend (pumpMain removes each as it finishes), so fitPump neither queues them
+       twice nor loses the ability to cancel the stale ones */
+    w.onerror = ev => { ev.preventDefault?.(); if (FIT.mode === "worker") { FIT.mode = "main"; FIT.worker = null; for (const [, p] of FIT.pend) FIT.queue.push(p); pumpMain(); } };
+    FIT.worker = w; FIT.mode = "worker";
+  } catch { FIT.mode = "main"; }
+}
+/* watchdog: a module worker that never answers (seen once under heavy machine load: 20 panels stuck "running") is
+   replaced by the main-thread path after 20 s of silence while fits are pending */
+function fitDog() { clearTimeout(FIT.dog); if (FIT.mode !== "worker" || !FIT.pend.size) return;
+  FIT.dog = setTimeout(() => { if (FIT.mode !== "worker" || !FIT.pend.size) return;
+    try { FIT.worker.terminate(); } catch { /* already gone */ } FIT.mode = "main"; FIT.worker = null;
+    for (const [, p] of FIT.pend) FIT.queue.push(p); pumpMain(); }, 20000); }
+function onFitMsg(m) { fitDog();
+  const p = FIT.pend.get(m.key) || [...FIT.pend.values()].find(q => q.reqId === m.reqId);
+  if (!p) { if (m.type === "result" && m.key) { putRes(m.key, m.result); spectra.schedule(); } return; }   // finished after a cancel: keep it
+  FIT.pend.delete(p.key);
+  const r = m.type === "result" ? m.result : {key: p.key, status: "error", message: m.message || "fit failed", comps: [], windows: [], model: null, profiles: [], ms: 0};
+  finishFit(p, r);
+}
+function finishFit(p, r) {
+  putRes(p.key, r);
+  emit("tng:fit", {id: p.id, ion: p.ion, case: p.ci, R: p.R, snr: p.snr, seed: p.seed, status: r.status, ms: r.ms ?? null, n_comp: (r.comps || []).length});
+  for (const f of FIT.wait.get(p.key) || []) f(r); FIT.wait.delete(p.key);
+  if (p.id === S.id) spectra.schedule();
+}
+let mainBusy = false;
+function pumpMain() { if (mainBusy || !FIT.queue.length) return; mainBusy = true;
+  setTimeout(() => { const p = FIT.queue.shift(); mainBusy = false; if (p && FIT.pend.get(p.key) === p) { let r; try { r = fitPanel(p.req); } catch (x) { r = {status: "error", message: String(x.message || x), comps: [], windows: []}; }
+    FIT.pend.delete(p.key); finishFit(p, r); } pumpMain(); }, 0); }
+/* -> {key, req} for a panel of the selected sightline, or {key, result} when it can be answered without fitting */
+function fitRequest(ion, ci) {
+  const I = fitIdent(ion, ci), key = cacheKey(I), raw = COMPRAW.get(S.id), d = dataFor(ion, ci), A = ION[ion];
+  if (!d || !A) return {key, I, result: {key, status: "no_seeds", message: "line not in this sightline", comps: [], windows: [], model: null, profiles: [], ms: 0}};
+  const seeds = raw?.rows?.[ion] || [], regions = raw?.aod?.[ion]?.[1] || [];
+  if (!raw || !seeds.length || !regions.length) return {key, I, result: {key, status: "no_seeds", comps: [], windows: [], model: null, profiles: [], ms: 0}};
+  /* the atomic data the catalogue's fits used (components.json params.atomic: SBI galaxies fit with the SBI f and
+     Gamma, review2_physics P1); a row from another catalogue (your rays) keeps the registry's */
+  const PA = raw.tag && raw.tag === compMeta.params_tag ? compMeta.params?.atomic?.[ion] : null;
+  const req = {id: I.id, ion, R: I.R, snr: I.snr, seed: I.seed, paramsTag: I.paramsTag,
+    atom: {lam0_A: PA?.lam0 ?? A.lam0_A, f: PA?.f ?? A.f, gamma_s: PA?.gamma ?? A.gamma_s, b_min: A.fit?.b_min, logN_max: A.fit?.logN_max},
+    line: {u0: d.line.u0, du: d.line.du, n: d.line.n, flux: d.line.flux}, vSys: d.vSys,
+    data: {v: d.v, flux: d.flux, sigma: d.sigma}, seeds, compKeys: raw.keys, regions};
+  return {key, req, I};
+}
+function enqueueFit(ion, ci) {
+  const fr = fitRequest(ion, ci);
+  if (FIT.res.has(fr.key) || FIT.pend.has(fr.key)) return fr.key;
+  if (fr.result) { finishFit({key: fr.key, ...fr.I}, fr.result); return fr.key; }
+  startWorker(); if (!FIT.pend.size) { FIT.t0 = performance.now(); FIT.last = ""; }
+  const p = {key: fr.key, reqId: ++FIT.reqN, req: fr.req, ...fr.I}; FIT.pend.set(fr.key, p);
+  if (FIT.mode === "worker") { FIT.worker.postMessage({type: "fit", reqId: p.reqId, req: fr.req}); fitDog(); } else { FIT.queue.push(p); pumpMain(); }
+  return fr.key;
+}
+/* after each draw: queue the panels in reading order (debounced so slider drags do not flood the worker) */
+const fitPump = debounce(() => {
+  if (!S.fit || !S.id || !SIGHT.has(S.id)) return;
+  /* B_fix R7: a sightline with no components catalogue (offline generated sightline, components.json missing) is marked,
+     so its panels get "no seeds" results and the status settles instead of staying at "fits 0 of N" */
+  if (!COMPRAW.has(S.id) && !NOCOMP.has(S.id)) { const id = S.id; ensureComps(id).then(r => { if (!r) NOCOMP.add(id); fitSig = ""; spectra.schedule(); }); return; }
+  const n0 = FIT.reqN, want = new Set(); for (const p of spectra.geometry().panels) want.add(enqueueFit(p.ion, p.ci));
+  if (FIT.reqN === n0 && !FIT.pend.size) FIT.last = "";          // everything came from the cache: no batch time to show
+  /* B_fix R4: a request someone awaits (tngApp.fit) is never cancelled as stale, so its promise always settles */
+  const stale = [...FIT.pend.keys()].filter(k => !want.has(k) && !FIT.wait.has(k));
+  if (stale.length) { if (FIT.mode === "worker") FIT.worker.postMessage({type: "cancel", keys: stale}); else FIT.queue = FIT.queue.filter(p => !stale.includes(p.key));
+    for (const k of stale) FIT.pend.delete(k); }
+  fitStatus();
+}, 120);
+function fitResult(ion, ci) { if (!S.fit) return null; return FIT.res.get(cacheKey(fitIdent(ion, ci))) || null; }
+/* C2 (owner decision 2, code 2): how a fitted component reads -> {limit, loose, hollow, tags, lo}. fit.js fitQuality(c)
+   ("ok", "sat", "unconstrained" or "bound") decides when the fit module exports it; without it state.js fitClass
+   applies the same flag rule. A lower limit's value lo is the smaller of the fitted log N and its share of the AOD
+   column of the degraded data over its fit window (state.js fitLimits), cached on the result per data object. */
+const FITQ = typeof FITM.fitQuality === "function" ? FITM.fitQuality : null;
+const fitQ = c => { if (!FITQ) return null; try { return FITQ(c); } catch { return null; } };
+const pm = (x, d) => (Number.isFinite(x) ? `±${fmtNum(x, d)}` : "");
+function compQuality(c, ion, r, d) {
+  const damped = !!ION[ion]?.damped, cls = x => fitClass(x, damped, fitQ(x)), q = cls(c);
+  if (q.limit) {
+    if (r && (!r._lim || r._limD !== d)) { r._lim = fitLimits(r, d, ION[ion], x => cls(x).limit); r._limD = d; }
+    const lo = r && r._lim ? r._lim.get(c) : undefined; q.lo = Number.isFinite(lo) ? lo : c.logN;
+  }
+  return q;
+}
+function fitStatus() {
+  const fs = $("#fitstatus");
+  if (!S.fit) { fs.dataset.state = "idle"; fs.textContent = ""; return; }
+  const ps = spectra.geometry().panels, rs = ps.map(p => fitResult(p.ion, p.ci)), done = rs.filter(Boolean).length;
+  if (done < ps.length) { fs.dataset.state = "running"; fs.textContent = `fits ${done} of ${ps.length}`; return; }
+  const st = rs.some(r => r.status === "error") ? "error" : rs.some(r => r.status === "budget") ? "budget" : "done";
+  if (FIT.t0 && !FIT.pend.size) { FIT.last = `  ${((performance.now() - FIT.t0) / 1000).toFixed(1)} s`; FIT.t0 = 0; }
+  fs.dataset.state = st; fs.textContent = ps.length && rs.every(r => r.status === "no_seeds") ? "no seeds" : `fits ${done} of ${ps.length}${FIT.last}`;
+}
+
+/* ---------------- spectra stage ---------------- */
+let instEmit = null, fitSig = "";
+const spectra = createSpectra({box: $("#spectra"), cv: $("#cv"), hitboxes: $("#hitboxes"), axis: $("#vaxis"), axisCv: $("#vaxis-cv"), more: $("#more-below")}, {
+  get S() { return S; }, reg, caseRS, vmax, color: ionColor,
+  data: (ion, ci) => (S.id && SIGHT.has(S.id) ? dataFor(ion, ci) : null),
+  fit: fitResult, quality: compQuality,
+  /* tune1 F13: each row's catalogue log N sits beside its ion box (every selected line, never truncated) */
+  rowNote: ion => { const v = CAT.get(S.id)?.logN?.[ion]; return Number.isFinite(v) ? `log N ${fmtLogN(v)}` : ""; },
+  missingText: ion => !S.id ? "" : SIGHT.has(S.id) ? `${ION[ion].label} is not in this sightline` : "loading",
+  readout(p, v) { const d = S.id && SIGHT.has(S.id) ? dataFor(p.ion, p.ci) : null; const lN = CAT.get(S.id)?.logN?.[p.ion];
+    let t = `${ION[p.ion].label}${Number.isFinite(lN) ? `  log N ${fmtLogN(lN)}` : ""}  v ${minus(Math.round(v))} km/s`;
+    if (d) { const m = clamp(Math.round((v - d.v[0]) / d.dvp), 0, d.v.length - 1); t += `  F ${fmtNum(d.flux[m], 2)}`; }
+    if (S.fit) { const r = fitResult(p.ion, p.ci);
+      if (r && r.comps && r.comps.length) { const c = r.comps.reduce((a, b) => Math.abs(b.v - v) < Math.abs(a.v - v) ? b : a);
+        /* B_fix M1, m3: with errors, or "unconstrained" when the fit does not pin the component; b keeps a decimal below 10.
+           C2 (owner decision 2, code 2): a saturated or degenerate component reads as a lower limit ("log N > 14.5 sat",
+           no errors), and every flag is named right after the value */
+        const q = compQuality(c, p.ion, r, d), bd = c.b < 10 ? 1 : 0, tags = q.tags.length ? " " + q.tags.join(" ") : "";
+        const bv = `  b ${fmtNum(c.b, bd)}`, vv = `  v ${minus(Math.round(c.v))}`;
+        t += q.limit ? `  fit log N > ${fmtNum(q.lo, 1)}${tags}${bv}${vv}`
+          : q.loose || !Number.isFinite(c.dlogN) ? `  fit log N ${fmtNum(c.logN, 2)}${tags}${bv}${vv}`
+          : `  fit log N ${fmtNum(c.logN, 2)}${pm(c.dlogN, 2)}${tags}${bv}${pm(c.db, c.db < 10 ? 1 : 0)}${vv}${pm(c.dv, c.dv < 10 ? 1 : 0)}`; }
+      else if (r && r.status === "no_seeds") t += "  no seeds"; else if (r) t += "  no components"; }
+    return t; },
+  onReadout(t) { const r = $("#readouts"), s = $("#statusline"); if (t) { r.textContent = t; r.hidden = false; s.hidden = true; } else { r.hidden = true; s.hidden = false; } },
+  onView(v, why) {
+    if (why === "dragend") { instEmit(); writeHashSoon(); return; }
+    /* tune1 F16: pan and zoom keep vc on a 0.1 km/s grid, so getState() and the hash never carry float noise */
+    if (v && v.reset) { S.vc = 0; S.vhw = reg.DEF.vhw; } else { S.vc = Math.round(v.vc * 10) / 10; S.vhw = v.vhw; }
+    clampView(S, vmax()); inst.syncV(); spectra.schedule(); writeHashSoon(); instEmit(); },
+  afterDraw() { if (S.fit) { const sig = JSON.stringify([S.id, S.ions, S.layout, S.R, S.sn, S.seed, COMPRAW.has(S.id), SIGHT.has(S.id)]); if (sig !== fitSig) { fitSig = sig; fitPump(); } } else fitSig = "";
+    fitStatus(); spectra.refreshReadout(); ensureSight(); if (!thumbArmed) armThumb(); dockRead(); }
+});
+const draw = () => spectra.schedule();
+
+/* ---------------- instrument and view controls ---------------- */
+const inst = createInstrument({rsliders: $("#rsliders"), sn: [$("#sn-0"), $("#sn-1")], snOut: [$("#sn-0-out"), $("#sn-1-out")], sn1wrap: $("#sn1wrap"),
+  vhw: $("#vhw"), vhwOut: $("#vhw-out")}, {get S() { return S; }, reg, vmax, onChange(kind) {
+    if (kind === "vhw") { clampView(S, vmax()); $("#vhw-out").textContent = "±" + S.vhw; $("#vhw").setAttribute("aria-valuetext", `±${S.vhw} km/s`); } draw(); writeHashSoon(); instEmit(); }});
+instEmit = debounce(() => emit("tng:instrument", {state: getState()}), 100);
+$("#vreset").addEventListener("click", () => { S.vc = 0; S.vhw = reg.DEF.vhw; clampView(S, vmax()); inst.syncV(); draw(); writeHashSoon(); instEmit(); });
+$("#intr").addEventListener("change", ev => { S.intr = ev.target.checked; sfx(S.intr ? "toggle-on" : "toggle-off"); draw(); writeHashSoon(); });
+$("#fit").addEventListener("change", ev => { sfx(ev.target.checked ? "toggle-on" : "toggle-off"); setFit(ev.target.checked); });
+function setFit(on) { S.fit = !!on; $("#fit").checked = S.fit; if (S.fit && S.id) ensureComps(S.id).then(() => draw()); draw(); fitStatus(); writeHashSoon(); instEmit(); }
+/* the instrument sliders tick once on release ("change"), never while dragging ("input") */
+$("#side").addEventListener("change", ev => { if (ev.target.type === "range") sfx("snap"); });
+$("#reroll").addEventListener("click", () => { sfx("press"); S.seed = (S.seed + 1) % 100000; draw(); writeHashSoon(); });
+function syncLayoutUI() { for (const r of $$("input[name=layout]")) r.checked = r.value === S.layout;
+  for (const s of $$(".sn1lab")) s.hidden = !(S.layout === "2SN" || S.layout === "4"); }
+for (const r of $$("input[name=layout]")) r.addEventListener("change", () => { if (!r.checked) return; sfx("select"); S.layout = r.value; syncLayoutUI(); inst.build(); draw(); writeHashSoon(); instEmit(); });
+
+/* ---------------- lines: popover checklist and labelled removable chips ---------------- */
+function presentLines() { const e = CAT.get(S.id), s = SIGHT.get(S.id); return s ? Object.keys(s.lines) : Array.isArray(e?.lines) ? e.lines : null; }
+function buildIons() {
+  const present = presentLines();
+  $("#ion-list").innerHTML = reg.IONS.map(i => { const absent = present && !present.includes(i.key);
+    return `<label class="ion-row${absent ? " absent" : ""}" style="--ic:${ionColor(i.key)}"><input type="checkbox" data-ion="${i.key}" data-testid="ion-${i.key}" data-tip="${esc(absent ? "Not in this sightline's spectra" : ION_TIPS[i.key] || `${i.label}, a ${reg.BANDS[i.band]?.label || i.band} line`)}"${S.ions.includes(i.key) ? " checked" : ""}>` +
+      `<span class="sw"></span><span class="nm">${esc(i.label)}</span><span class="bd">${esc(reg.BANDS[i.band]?.label || i.band)}</span></label>`; }).join("");
+  $("#ion-chips").innerHTML = S.ions.map(k => `<button type="button" class="chip" data-ion="${k}" style="--ic:${ionColor(k)}" data-tip="${esc(S.ions.length < 2 ? "The last line stays; add another to remove it" : `${ION_TIPS[k] || ION[k].label}; × removes, shift-click solos`)}" aria-label="Remove ${esc(ION[k].label)}"${S.ions.length < 2 ? " disabled" : ""}><span class="sw"></span>${esc(ION[k].label)}<span class="x" aria-hidden="true">×</span></button>`).join("");
+  $("#ion-open .n").textContent = S.ions.length;
+}
+$("#ion-list").addEventListener("change", ev => { const c = ev.target.closest("input[data-ion]"); if (!c) return;
+  const on = $$("#ion-list input:checked").map(x => x.dataset.ion); if (!on.length) { c.checked = true; return; } sfx(c.checked ? "select" : "deselect"); setIons(on); });
+$("#ion-chips").addEventListener("click", ev => { const b = ev.target.closest("button[data-ion]"); if (b && S.ions.length > 1) { sfx("deselect"); setIons(S.ions.filter(k => k !== b.dataset.ion)); } });
+$("#ion-all").addEventListener("click", () => setIons(reg.KEYS));
+$("#ion-none").addEventListener("click", () => setIons([S.ions[0]]));
+$("#ion-default").addEventListener("click", () => setIons(reg.DEF.ions));
+function setIons(l) { S.ions = reg.KEYS.filter(k => l.includes(k)); if (!S.ions.length) S.ions = reg.DEF.ions.slice();
+  clampView(S, vmax()); buildIons(); inst.build(); draw(); writeHashSoon(); instEmit(); }
+
+/* ---------------- popovers ---------------- */
+let hoverT = 0, hoverOpen = null, lastOpener = null;
+function place(btn, pop) {
+  if (innerWidth < 640) { pop.classList.add("sheet"); pop.style.left = pop.style.top = ""; return; } pop.classList.remove("sheet");
+  /* rects are in screen px; with CSS zoom on <html> (125 % on large screens) left/top and offset sizes are page px */
+  const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1, W = innerWidth / z, H = innerHeight / z;
+  const b = btn.getBoundingClientRect(), r = {left: b.left / z, right: b.right / z, bottom: b.bottom / z}, pw = pop.offsetWidth, ph = pop.offsetHeight;
+  let x = r.left, y = r.bottom + 6;
+  if (x + pw > W - 12) x = Math.max(12, r.right - pw); if (y + ph > H - 12) y = Math.max(12, H - ph - 12);
+  pop.style.left = x + "px"; pop.style.top = y + "px"; }
+function openPop(btn, pop, focus = true) {
+  closePops(pop); pop.hidden = false; btn.setAttribute("aria-expanded", "true"); lastOpener = btn; place(btn, pop);
+  if (pop.id === "gal-pop" || pop.id === "find-pop") backendCatalog();
+  if (pop.id === "gal-pop") gallery.onOpen(); if (pop.id === "gxy-pop") GPICK?.onOpen(); if (pop.id === "find-pop") mountFind(); if (pop.id === "geo-pop") renderBackends();
+  if (focus) {
+    /* B_fix F2: an info popover takes the focus itself (its links are next in the Tab order), and closes once the focus
+       leaves it; the other popovers focus their first control */
+    if (INFO_POPS.has(pop.id)) { pop.tabIndex = -1; setTimeout(() => pop.focus({preventScroll: true}), 0); }
+    else { const f = pop.querySelector("input[type=search],input:not([type=radio]):not([disabled]),button:not([disabled]),select"); if (f) setTimeout(() => f.focus(), 0); } }
+}
+const INFO_POPS = new Set(["pop-read", "pop-methods", "pop-licence"]);
+for (const id of INFO_POPS) { const pop = document.getElementById(id);
+  pop.addEventListener("focusout", ev => { const to = ev.relatedTarget; if (!to || pop.hidden || pop.contains(to) || (lastOpener && lastOpener.contains(to))) return; closePops(); }); }
+/* B_fix F9: the Save menu moves with the arrow keys, Home and End */
+$("#dl-menu").addEventListener("keydown", ev => { const items = $$("#dl-menu [role=menuitem]").filter(b => !b.disabled); if (!items.length) return;
+  const i = items.indexOf(document.activeElement), n = {ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: items.length - 1}[ev.key];
+  if (n == null) return; ev.preventDefault(); items[(n + items.length) % items.length].focus(); });
+function closePops(except) { for (const p of $$(".pop")) if (p !== except && !p.hidden) { p.hidden = true; for (const b of $$(`[aria-controls="${p.id}"]`)) b.setAttribute("aria-expanded", "false"); if (hoverOpen === p) hoverOpen = null; } }
+for (const btn of $$("[aria-controls]")) {
+  const pop = document.getElementById(btn.getAttribute("aria-controls")); if (!pop || !pop.classList.contains("pop")) continue;
+  btn.addEventListener("click", ev => { ev.stopPropagation(); const info = btn.classList.contains("info");   /* info popovers: a soft open and close (never on the hover preview) */
+    if (pop.hidden || hoverOpen === pop) { if (info && pop.hidden) sfx("open"); hoverOpen = null; openPop(btn, pop); } else { if (info) sfx("close"); closePops(); } });
+  if (btn.classList.contains("info")) {
+    btn.addEventListener("mouseenter", () => { if (!matchMedia("(hover:hover)").matches) return; clearTimeout(hoverT);
+      hoverT = setTimeout(() => { if (pop.hidden) { openPop(btn, pop, false); hoverOpen = pop; } }, 300); });
+    const leave = () => { clearTimeout(hoverT); if (hoverOpen === pop) hoverT = setTimeout(() => { if (hoverOpen === pop && !pop.matches(":hover") && !btn.matches(":hover")) closePops(); }, 350); };
+    btn.addEventListener("mouseleave", leave); pop.addEventListener("mouseleave", leave);
+    btn.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); btn.click(); } });
+  }
+}
+document.addEventListener("click", ev => { if (!ev.target.closest(".pop") && !ev.target.closest("[aria-controls]")) closePops(); });
+document.addEventListener("keydown", ev => { if (ev.key !== "Escape") return; const open = $$(".pop").find(p => !p.hidden);
+  if (open) { closePops(); if (lastOpener && document.contains(lastOpener)) lastOpener.focus({preventScroll: true}); }
+  else if (document.body.classList.contains("ctl-open")) toggleDrawer(false, true); });
+addEventListener("resize", debounce(() => { const p = $$(".pop").find(q => !q.hidden); if (p) { const b = $(`[aria-controls="${p.id}"][aria-expanded="true"]`); if (b) place(b, p); } }, 80));
+
+/* ---------------- select a sightline ---------------- */
+let loadTok = 0;
+async function select(id, auto = false, source = "gallery") {
+  if (!CAT.has(id)) return; if (!auto || id === pendingId) pendingId = null; const changed = S.id !== id; S.id = id; const tok = ++loadTok; SIGHT_FAIL.delete(id);
+  if (changed) emit("tng:select", {id, source});
+  status(); writeHashSoon(); syncGeom(CAT.get(id)); gallery.render();
+  if (S.fit) ensureComps(id).then(() => { if (id === S.id) draw(); });
+  try { await getSight(id); } catch (x) { if (tok === loadTok) { $("#statusline").innerHTML = `<span class="bad">could not load <b>${esc(id)}</b>: ${esc(x.message)}</span>`; draw(); } return; }
+  if (tok !== loadTok) return;
+  clampView(S, vmax()); inst.syncV(); buildIons(); draw(); status();
+  const list = gallery.visible.length ? gallery.visible : sorted(), i = list.findIndex(e => e.id === id);   // prefetch neighbours
+  for (const d of [1, -1]) { const n = list[(i + d + list.length) % list.length]; if (n && n._static) getSight(n.id).catch(() => {}); }
+}
+/* ux4 B: the top-bar button shows the clean parameters (orientation, b, Φ; custom: L, b); the id is in its tip, in the
+   picker's copy button (#gal-copy), the status line and the URL */
+function barLabel() {
+  const e = CAT.get(S.id), b = $("#gal-open"), lab = b && b.querySelector(".slab"); if (!lab) return;
+  lab.dataset.id = S.id || "";
+  if (e) { const L = sightLabel(e); lab.innerHTML = L.html; b.setAttribute("aria-label", `Sightline ${L.text.replace(/ {2}/g, ", ")}`); }
+  else { lab.textContent = S.id || "loading"; b.removeAttribute("aria-label"); }
+  b.dataset.tip = sightTip(e);
+  const cp = $("#gal-copy"); if (cp && S.id) { cp.dataset.tip = `Copy the id ${S.id}`; cp.setAttribute("aria-label", `Copy the sightline id ${S.id}`); }
+}
+$("#gal-copy")?.addEventListener("click", async () => { const id = S.id, btn = $("#gal-copy"); if (!id) return;
+  const ok = await copyText(id); sfx(ok ? "copy" : "error"); btn.dataset.state = ok ? "done" : "fail"; note(ok ? `copied ${id}` : "could not copy the id", ok ? "" : "bad");
+  setTimeout(() => { delete btn.dataset.state; }, 1400); });
+/* the spectra source of one row: its own tag, else (rays cast on the server: Trident) or the galaxy's library source */
+const rowSource = e => srcOf({src: e.spectra}) || (kindOf(e) !== "library" ? "trident" : srcOf(SRC) || "trident");
+function status() {
+  barLabel();
+  const e = CAT.get(S.id), st = $("#statusline"); st.dataset.id = S.id || "";
+  if (!e) { st.textContent = S.id ? S.id : "no sightline selected"; return; }
+  /* fix F1: the bar already shows orientation, b and Φ; the line adds only what it lacks (seed, rich-line count, your ray)
+     and ends with the id, muted */
+  const n = nShow(e), rs = rowSource(e), extra = [e.orientation === "random" && e.seed != null ? `seed ${esc(e.seed)}` : "",
+    n ? `${n} rich ${n === 1 ? "line" : "lines"}` : "", kindOf(e) !== "library" ? "your ray" : "",
+    rs !== srcOf(SRC) ? (rs === "trident" ? "Trident HM2012, ±R200c" : "THOR spectra") : "",
+    e.window_truncated ? "gas beyond ±1500 km/s" : ""].filter(Boolean);
+  st.innerHTML = [...extra, `<span class="sid">${esc(e.id)}</span>`].join("  ");
+  st.title = st.textContent;
+}
+
+/* ---------------- sightline servers ---------------- */
+const normUrl = s => String(s || "").trim().replace(/\/+$/, "");
+function candidates() { const out = [];
+  const q = new URLSearchParams(location.search).get("api"); if (q) out.push(...q.split(","));
+  const ls = store.get("tngsight.api"); if (ls) out.push(...ls.split(","));
+  const loopPage = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || location.protocol === "file:";
+  out.push(...(CFG.backends || []).filter(u => loopPage || !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(u)));
+  return [...new Set(out.map(normUrl).filter(u => /^https?:\/\/[^\s/]+/.test(u)))]; }
+/* a build's own server answers CORS only for the origins in its allow-list: from any other origin the probe is an opaque
+   no-cors request (reachability only), so the browser logs no CORS error; explicit ?api= and stored URLs get the full probe */
+const API_ORIGINS = new Set(CFG.api_origins || ["https://galaxies.tanmaysingh.uk", "https://tanmay-starslab.github.io", "http://localhost:8000", "http://127.0.0.1:8000"]);
+function corsOk(url) { try { if (new URL(url).origin === location.origin || API_ORIGINS.has(location.origin)) return true; } catch { return false; }
+  const ex = [new URLSearchParams(location.search).get("api"), store.get("tngsight.api")].filter(Boolean).flatMap(s => s.split(",")).map(normUrl);
+  return ex.includes(normUrl(url)); }
+async function probe(url, ms = 8000) { const ac = new AbortController(), t = setTimeout(() => ac.abort(), ms), t0 = performance.now();
+  try { if (!corsOk(url)) { await fetch(url + "/api/health", {signal: ac.signal, cache: "no-store", mode: "no-cors"});
+      return {url, err: `reachable, but its CORS allow-list does not include ${location.origin}`}; }
+    const r = await fetch(url + "/api/health", {signal: ac.signal, cache: "no-store"}); if (!r.ok) throw new Error("HTTP " + r.status);
+    const h = await r.json(); if (!h || h.status !== "ok") throw new Error("not ok"); return {url, h, ms: performance.now() - t0};
+  } catch (x) { return {url, err: x.name === "AbortError" ? "timeout" : (x.message || "unreachable")}; } finally { clearTimeout(t); } }
+let probing = null, probeGen = 0, probedOnce = false, retryN = 0, retryT = null, apiMs = null;
+const RETRY_MS = [2000, 5000, 15000];
+function discover(ms = 8000, fresh = false) { if (probing && !fresh) return probing; const gen = ++probeGen;
+  const run = (async () => {
+    const res = await Promise.all(candidates().map(u => probe(u, ms))), ok = res.filter(p => p.h);
+    const pick = ok.find(p => p.h.warm) || ok[0] || null, prev = API;
+    if (gen !== probeGen && !pick) return;
+    PROBES = res; probedOnce = true; API = pick ? pick.url : null; HEALTH = pick ? pick.h : null; apiMs = pick ? pick.ms : null;
+    pill(); renderBackends(); setGeoEnabled(); banner();
+    if (API !== prev) { NOCOMP.clear(); emit("tng:backend", {api: API, warm: !!(HEALTH && HEALTH.warm)}); }
+    clearTimeout(retryT); if (API) retryN = 0; else if (retryN < RETRY_MS.length) retryT = setTimeout(() => discover(), RETRY_MS[retryN++]);
+    if (API !== prev) bcatFor = null;
+    if (API && (pendingId || !staticOk)) await backendCatalog();
+  })().finally(() => { if (probing === run) probing = null; });
+  probing = run; return run; }
+function backendFailed() { HEALTH = null; setTimeout(discover, 0); }
+function pill() { const p = $("#pill");
+  if (!API && !probedOnce) { p.dataset.state = "offline"; p.textContent = "probing"; p.title = "looking for a sightline server"; }
+  else if (!API) { p.dataset.state = "offline"; p.textContent = "offline"; p.title = PUBLIC ? "no sightline server answered: library sightlines only" : "this build has no public sightline server: library sightlines only"; }
+  else { const warm = !!HEALTH.warm; p.dataset.state = warm ? "live" : "warming";
+    p.textContent = warm ? `live ${apiMs != null ? (apiMs / 1000).toFixed(1) + " s" : ""}`.trim() : "warming";
+    p.title = `${HEALTH.node || new URL(API).host}: queue ${HEALTH.queue?.queued ?? 0} queued, ${HEALTH.queue?.running ?? 0} running`; }
+  $("#dlpdf").disabled = false; }
+function renderBackends() { $("#backends").innerHTML = PROBES.length ? PROBES.map(p => `<span>${p.url === API ? "● " : "○ "}${esc(p.url)}  ${p.h ? (p.h.warm ? "warm" : "warming") + (p.h.node ? ", " + esc(p.h.node) : "") : esc(p.err)}</span>`).join("") : "<span>no candidate URLs</span>"; }
+async function mergeBackendCatalog() { if (!SRV()) return; const g0 = GAL;
+  try { const r = await fetch(gq(API + "/api/catalog")); if (g0 !== GAL) return; if (!r.ok) throw new Error(); const c = await r.json();
+    for (const e of c.entries || []) upsert(e, false); catalogChanged(); status();
+    if (pendingId && CAT.has(pendingId)) select(pendingId, true, "hash"); } catch { bcatFor = null; backendFailed(); } }
+/* perf R5: the server's catalogue (rays cast by visitors, about 150 kB) merges on demand: when the sightline gallery, Find
+   or Ask opens, a linked id is not in the library, or the static catalogue failed; never on a plain page load. Once per
+   server and galaxy. */
+let bcatFor = null, staticOk = false;
+function backendCatalog() { const k = SRV() && SRV() + "|" + GAL; if (!k || bcatFor === k) return Promise.resolve(); bcatFor = k; return mergeBackendCatalog(); }
+const DEFAULTS = new Set((CFG.backends || []).map(normUrl));
+const PUBLIC = [...DEFAULTS].some(u => /^https:\/\//.test(u));
+function overrides() { const q = new URLSearchParams(location.search).get("api"), ls = store.get("tngsight.api");
+  return [...new Set([q, ls].filter(Boolean).flatMap(s => s.split(",")).map(normUrl).filter(u => /^https?:\/\/[^\s/]+/.test(u) && !DEFAULTS.has(u)))]; }
+function banner() { const o = overrides(), b = $("#apibanner"); b.hidden = !o.length; document.body.classList.toggle("has-banner", !!o.length); if (!o.length) return;
+  const host = u => { try { return new URL(u).host; } catch { return u; } }, inUse = API && o.includes(API);
+  $("#apibanner_t").innerHTML = `${inUse ? "Using" : "Configured to try"} a non-default sightline server: <b>${o.map(u => esc(host(u))).join(", ")}</b>; ` +
+    (inUse ? "generated sightlines and their catalogue entries come from it, not from this site" : "it is probed before this site's servers"); }
+$("#apireset").addEventListener("click", () => { store.set("tngsight.api", null); const u = new URL(location.href); u.searchParams.delete("api"); location.replace(u.href); });
+$("#apisave").addEventListener("click", () => { const u = normUrl($("#apiurl").value); if (u && !/^https?:\/\//.test(u)) { geomsg("Server URL must start with http:// or https://", "bad", "url"); return; }
+  store.set("tngsight.api", u || null); banner(); discover(8000, true); });
+$("#apiclear").addEventListener("click", () => { $("#apiurl").value = ""; store.set("tngsight.api", null); banner(); discover(8000, true); });
+$("#apiurl").value = store.get("tngsight.api") || "";
+let idleN = 0;
+(function reprobe() { setTimeout(async () => { if (!document.hidden) { await discover(); idleN = API ? 0 : idleN + 1; } reprobe(); },
+  API ? 60000 : Math.min(900000, 60000 * 2 ** idleN)); })();
+
+/* ---------------- new sightline: geometry form, submit, job tracking ---------------- */
+const orient = () => (document.querySelector('input[name="orient"]:checked') || {}).value;
+function seedState() { $("#gseed").disabled = orient() !== "random"; }
+for (const r of $$('input[name="orient"]')) r.addEventListener("change", seedState);
+let JOB = null, busy = false;
+function setGeoEnabled() { $("#submit").disabled = !!JOB || busy; $("#submit").dataset.tip = API ? "Load from the library, or cast on the sightline server" : "Offline: only library sightlines can be loaded"; }
+function syncGeom(e) { if (!e || kindOf(e) === "custom") return; for (const r of $$('input[name="orient"]')) r.checked = r.value === e.orientation;
+  $("#gb").value = Math.round(+e.b_kpc); $("#gaz").value = Math.round(+e.azimuth_deg) % 360; if (e.seed != null) $("#gseed").value = e.seed; seedState(); }
+class GeomError extends Error { constructor(m, code) { super(m); this.code = code; } }
+function readGeom() {
+  const o = orient(), b = +$("#gb").value, az = +$("#gaz").value, sd = $("#gseed").value;
+  if (!o) throw new GeomError("choose an orientation", "orientation");
+  if (!Number.isFinite(b) || b < 0 || b > 300) throw new GeomError("b must be between 0 and 300 kpc", "bound_b");
+  if (!Number.isFinite(az) || az < 0 || az >= 360) throw new GeomError("Φ must be between 0 and 359°", "bound_az");
+  let seed = null; if (o === "random") { seed = Number(sd); if (sd === "" || !Number.isInteger(seed) || seed < 0 || seed > 4294967295) throw new GeomError("random orientation needs an integer seed (0 to 4294967295)", "seed"); }
+  return {orientation: o, b_kpc: b, azimuth_deg: az, seed};
+}
+function findLocal(g) { const az = ((Math.round(g.azimuth_deg) % 360) + 360) % 360;
+  return [...CAT.values()].find(e => e.orientation === g.orientation && Math.round(+e.b_kpc) === Math.round(g.b_kpc) && (Math.round(+e.azimuth_deg) % 360) === az && (g.orientation !== "random" || +e.seed === g.seed)); }
+function progress(stage, frac, extra) {
+  const P = $("#prog"); P.hidden = stage == null; if (stage == null) return;
+  const st = String(stage).startsWith("spectrum") ? "spectra" : stage, i = Math.max(0, STAGES.indexOf(st));
+  let f = clamp(+frac || 0, 0, 1);
+  if (st === "spectra" && String(stage).includes(":")) { const k = String(stage).split(":")[1], j = reg.KEYS.indexOf(k); if (j >= 0) f = (j + f) / reg.KEYS.length; }
+  const pct = Math.round(100 * (i + f) / STAGES.length), sb = $("#stagebar");
+  sb.setAttribute("aria-valuenow", pct); sb.setAttribute("aria-valuetext", `${st}, ${pct}%`);
+  sb.querySelectorAll("span").forEach((s, j) => { s.className = j < i ? "done" : ""; s.firstChild.style.width = j === i ? (f * 100).toFixed(0) + "%" : ""; });
+  $("#stagenames").querySelectorAll("span").forEach((s, j) => { s.className = j === i ? "on" : ""; s.textContent = j === 0 && extra != null ? `queued ${extra}` : STAGES[j]; });
+}
+function encodeTNGS(vSys, lines, keys) {
+  const ks = keys.filter(k => lines[k]);
+  let total = 16;
+  for (const k of ks) total += 40 + 2 * lines[k].n;
+  const buf = new ArrayBuffer(total), dv = new DataView(buf);
+  dv.setUint8(0, 84); dv.setUint8(1, 78); dv.setUint8(2, 71); dv.setUint8(3, 83); // "TNGS"
+  dv.setUint8(4, 2); dv.setUint8(5, ks.length);
+  dv.setFloat64(8, Number.isFinite(vSys) ? vSys : 0, true);
+  let o = 16;
+  for (const k of ks) {
+    const L = lines[k];
+    for (let i = 0; i < Math.min(8, k.length); i++) dv.setUint8(o + i, k.charCodeAt(i));
+    dv.setUint32(o + 8, L.n, true);
+    dv.setFloat64(o + 16, L.u0, true);
+    dv.setFloat64(o + 24, L.du, true);
+    dv.setFloat64(o + 32, L.rest, true);
+    o += 40;
+    for (let i = 0; i < L.n; i++) {
+      const q = Math.round(clamp(L.flux[i], 0, 1) * 65535);
+      dv.setUint16(o + 2 * i, q, true);
+    }
+    o += 2 * L.n;
+  }
+  return buf;
+}
+async function castCubeRay(kind, body, fromBridge) {
+  const vc = vizCfg();
+  if (!vc || !vc.base) throw new Error("3D ion cubes are not configured for this galaxy");
+  const jg = GAL;
+  progress("queued", 0.5); geomsg(`Preparing 3D ion cubes for ${activeNoun()} ${GAL}`, "", "preparing");
+  const [VD, VL, Pk] = await Promise.all([import(modUrl("vizdata.js")), import(modUrl("vizload.js")), import(modUrl("picker.js"))]);
+  const mUrl = vc.manifest_override || vc.manifest || (vc.base.replace(/\/?$/, "/") + "manifest_v2.json");
+  progress("load", 0.15);
+  const manifest = await VD.loadManifestV2(mUrl, {fetchText: VL.fetchText});
+  const loader = VL.makeLoader({manifest, base: vc.base.replace(/\/?$/, "/"), fallbackBase: vc.fallback_base});
+  const mg = manifest.galaxy || {}, Lhat = mg.Lhat || CFG.frame?.Lhat || [0, 0, 1], xhat = mg.xhat || CFG.frame?.xhat || [1, 0, 0], yhat = mg.yhat || CFG.frame?.yhat || [0, 1, 0];
+  const r200 = +mg.R200c_kpc || +CFG.galaxy?.R200c_kpc || 200;
+  const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const unit3 = v => { const n = Math.hypot(v[0], v[1], v[2]); return n > 0 ? [v[0] / n, v[1] / n, v[2] / n] : [0, 0, 1]; };
+  const skyAxes = nLos => {
+    const dL = dot3(Lhat, nLos);
+    let eMin = [Lhat[0] - dL * nLos[0], Lhat[1] - dL * nLos[1], Lhat[2] - dL * nLos[2]];
+    if (Math.hypot(eMin[0], eMin[1], eMin[2]) < 1e-6) {
+      const dx = dot3(xhat, nLos), eMaj = unit3([xhat[0] - dx * nLos[0], xhat[1] - dx * nLos[1], xhat[2] - dx * nLos[2]]);
+      return [eMaj, unit3(cross3(nLos, eMaj))];
+    }
+    eMin = unit3(eMin);
+    return [unit3(cross3(nLos, eMin)), eMin];
+  };
+  let id, orientName, bKpc, azDeg, seed = null, p0, p1, nLos, halfKpc;
+  if (kind === "custom") {
+    const v = Pk.validate(body.p0_kpc, body.p1_kpc, Lhat);
+    if (!v.ok) throw new Error(v.errors.join("; "));
+    p0 = v.p0; p1 = v.p1; id = await Pk.customId(p0, p1);
+    orientName = "custom"; bKpc = Math.round(v.metrics.b * 10) / 10; halfKpc = Math.round(v.metrics.length * 5) / 10;
+    nLos = v.metrics.n_los;
+    const [eMaj, eMin] = skyAxes(nLos), rho = v.metrics.closest;
+    azDeg = bKpc < 1e-6 ? 0 : Math.round(((Math.atan2(dot3(rho, eMin), dot3(rho, eMaj)) * 180 / Math.PI) % 360 + 360) % 360);
+  } else {
+    orientName = body.orientation; bKpc = Math.round(+body.b_kpc); azDeg = ((Math.round(+body.azimuth_deg) % 360) + 360) % 360;
+    seed = orientName === "random" ? +body.seed : null;
+    const pref = orientName === "face-on" ? "face" : orientName === "edge-on" ? "edge" : "rand";
+    id = `${pref}_b${String(bKpc).padStart(3, "0")}_a${String(azDeg).padStart(3, "0")}${orientName === "random" && seed != null ? "_s" + seed : ""}`;
+    if (orientName === "face-on") nLos = [...Lhat];
+    else if (orientName === "edge-on") nLos = [...xhat];
+    else { const r = FITM.rng(seed ?? 1); nLos = unit3([FITM.gauss(r), FITM.gauss(r), FITM.gauss(r)]); }
+    const [eMaj, eMin] = skyAxes(nLos), phi = azDeg * Math.PI / 180, cp = Math.cos(phi), sp = Math.sin(phi);
+    const rho = [bKpc * (cp * eMaj[0] + sp * eMin[0]), bKpc * (cp * eMaj[1] + sp * eMin[1]), bKpc * (cp * eMaj[2] + sp * eMin[2])];
+    halfKpc = r200;
+    p0 = [rho[0] - halfKpc * nLos[0], rho[1] - halfKpc * nLos[1], rho[2] - halfKpc * nLos[2]];
+    p1 = [rho[0] + halfKpc * nLos[0], rho[1] + halfKpc * nLos[1], rho[2] + halfKpc * nLos[2]];
+  }
+  if (CAT.has(id) && SIGHT.has(id)) {
+    geomsg(`Loaded ${id} (already computed).`, "good", "ready");
+    await select(id, false, "job"); if (fromBridge) showTab("spectra");
+    return {status: "ready", id};
+  }
+  const rows = manifest.frame?.rows || [xhat, yhat, Lhat];
+  const toDisk = p => [dot3(rows[0], p), dot3(rows[1], p), dot3(rows[2], p)];
+  const p0d = toDisk(p0), p1d = toDisk(p1), nd = unit3([p1d[0] - p0d[0], p1d[1] - p0d[1], p1d[2] - p0d[2]]);
+  const needL1 = bKpc < 96 && !!manifest.levels?.L1, lvls = needL1 ? ["L0", "L1"] : ["L0"];
+  const fields = ["T", "vx", "vy", "vz", ...reg.KEYS].filter(k => manifest.gas?.fields?.[k]);
+  const cubes = {L0: {}, L1: {}};
+  let done = 0; const tot = fields.length * lvls.length;
+  progress("ray", 0.1); geomsg(`Tracing ray ${id} through 3D cubes`, "", "progress");
+  for (const L of lvls) {
+    await Promise.all(fields.map(async k => {
+      const c = await loader.load("gas", k, L, {prio: 0});
+      cubes[L][k] = {data: c.data, n: c.n, half: manifest.levels[L].half_kpc, vmin: manifest.gas.fields[k].vmin, vmax: manifest.gas.fields[k].vmax};
+      done++; progress("spectra", done / tot * 0.85);
+    }));
+  }
+  const nSteps = 512, dlKpc = Math.hypot(p1d[0] - p0d[0], p1d[1] - p0d[1], p1d[2] - p0d[2]) / nSteps, dlCm = dlKpc * VD.CM_PER_KPC;
+  const sampleAt = (k, x, y, z) => {
+    const L = (needL1 && Math.max(Math.abs(x), Math.abs(y), Math.abs(z)) < 96 && cubes.L1[k]) ? "L1" : "L0";
+    const C = cubes[L][k]; if (!C) return NaN;
+    const n = C.n, h = C.half;
+    if (Math.abs(x) >= h || Math.abs(y) >= h || Math.abs(z) >= h) return NaN;
+    const ix = Math.min(n - 1, Math.max(0, Math.floor((x / h * 0.5 + 0.5) * n)));
+    const iy = Math.min(n - 1, Math.max(0, Math.floor((y / h * 0.5 + 0.5) * n)));
+    const iz = Math.min(n - 1, Math.max(0, Math.floor((z / h * 0.5 + 0.5) * n)));
+    const q = C.data[ix + n * (iy + n * iz)];
+    return q === 0 ? NaN : C.vmin + (q - 1) * (C.vmax - C.vmin) / 254;
+  };
+  const vBins = Array.from({length: nSteps}, (_, s) => {
+    const t = (s + 0.5) / nSteps, x = p0d[0] + t * (p1d[0] - p0d[0]), y = p0d[1] + t * (p1d[1] - p0d[1]), z = p0d[2] + t * (p1d[2] - p0d[2]);
+    const lgT = sampleAt("T", x, y, z), T = Number.isFinite(lgT) ? 10 ** lgT : 2e4;
+    const vx = sampleAt("vx", x, y, z), vy = sampleAt("vy", x, y, z), vz = sampleAt("vz", x, y, z);
+    const vlos = (Number.isFinite(vx) ? vx : 0) * nd[0] + (Number.isFinite(vy) ? vy : 0) * nd[1] + (Number.isFinite(vz) ? vz : 0) * nd[2];
+    return {x, y, z, T, vlos: clamp(vlos, -1480, 1480)};
+  });
+  const vGrid = FITM.arange(-1500, 1501, 1), nGrid = vGrid.length;
+  const lines = {}, logNMap = {}, compRows = {}, aodMap = {};
+  for (const k of reg.KEYS) {
+    const atom = ION[k], mass = atom?.mass_amu || 12, bMin = atom?.fit?.b_min || 3;
+    const byV = new Map();
+    let totN = 0;
+    for (const st of vBins) {
+      const lgN = sampleAt(k, st.x, st.y, st.z);
+      if (!Number.isFinite(lgN)) continue;
+      const dN = (10 ** lgN) * dlCm;
+      if (!(dN > 0)) continue;
+      totN += dN;
+      const b2 = Math.max(bMin * bMin, 0.016629 * st.T / mass + 64);
+      const vb = Math.round(st.vlos / 2) * 2;
+      const cur = byV.get(vb);
+      if (cur) { cur.vN += st.vlos * dN; cur.b2N += b2 * dN; cur.N += dN; }
+      else byV.set(vb, {vN: st.vlos * dN, b2N: b2 * dN, N: dN});
+    }
+    const vComps = [];
+    for (const c of byV.values()) {
+      if (c.N > 1e8) vComps.push([c.vN / c.N, Math.log10(c.N), Math.min(180, Math.sqrt(c.b2N / c.N))]);
+    }
+    const tau = FITM.tauVoigt(atom, vComps, vGrid), flux = new Float64Array(nGrid);
+    for (let i = 0; i < nGrid; i++) flux[i] = Math.exp(-tau[i]);
+    lines[k] = {n: nGrid, u0: -1500, du: 1, rest: atom.lam0_A, flux};
+    const logN = totN > 0 ? Math.round(Math.log10(totN) * 100) / 100 : 10.0;
+    logNMap[k] = logN;
+    // Build seed components from top velocity clusters for in-browser Voigt fitting
+    const sortedC = [...vComps].sort((a, b) => b[1] - a[1]);
+    const seeds = [];
+    for (const c of sortedC) {
+      if (c[1] < 11.2) continue;
+      const hit = seeds.find(s => Math.abs(s[0] - c[0]) < Math.max(18, 1.2 * s[2]));
+      if (hit) {
+        const n1 = 10 ** hit[1], n2 = 10 ** c[1], ns = n1 + n2;
+        hit[0] = (hit[0] * n1 + c[0] * n2) / ns;
+        hit[1] = Math.log10(ns);
+        hit[2] = Math.min(180, Math.sqrt((hit[2] * hit[2] * n1 + c[2] * c[2] * n2) / ns));
+      } else if (seeds.length < 5) seeds.push([...c]);
+    }
+    seeds.sort((a, b) => a[0] - b[0]);
+    compRows[k] = seeds.map(s => [Math.round(s[0] * 10) / 10, 1.0, Math.round(s[1] * 100) / 100, 0.08, Math.round(s[2] * 10) / 10, 1.5, 0, 0, null]);
+    if (seeds.length) {
+      const vlo = Math.max(-1480, Math.floor(Math.min(...seeds.map(s => s[0] - 2.5 * s[2])) - 15));
+      const vhi = Math.min(1480, Math.ceil(Math.max(...seeds.map(s => s[0] + 2.5 * s[2])) + 15));
+      aodMap[k] = [logN, [[0, vlo, vhi, logN, 0]]];
+    } else aodMap[k] = [null, []];
+  }
+  progress("fit", 0.92);
+  const entry = {
+    id, orientation: orientName, b_kpc: bKpc, azimuth_deg: azDeg, ...(seed != null ? {seed} : {}),
+    v_sys: 0, p0: p0.map(x => Math.round(x * 10) / 10), p1: p1.map(x => Math.round(x * 10) / 10),
+    half_kpc: halfKpc, logN: logNMap, showcase_ions: reg.KEYS.filter(k => logNMap[k] >= 13.5 && logNMap[k] <= 16.5),
+    generated: true, spectra: "trident"
+  };
+  progress("save", 1);
+  if (jg === GAL) {
+    upsert(entry, false);
+    const raw = normComps(compRows, DEF_KEYS, aodMap);
+    if (raw) COMPRAW.set(id, raw);
+    const buf = encodeTNGS(0, lines, reg.KEYS);
+    IDB.put(idbKey(id), {entry: strip(CAT.get(id)), bin: buf, galaxy: GAL});
+    putSight(id, decodeTNGS(buf, reg.KEYS));
+    catalogChanged();
+    geomsg(`Generated ${id} from the 3D ion cubes.`, "good", "job_done");
+    note(`generated ${id}`, "good");
+    setTimeout(() => progress(null), 1500);
+    emit("tng:done", {job_id: "local_" + id, id, entry: strip(CAT.get(id) || entry)});
+    await select(id, false, "job");
+    if (kind === "custom" || fromBridge) showTab("spectra");
+  }
+  return {status: "ready", id};
+}
+async function submitJob(kind, body, fromBridge) {
+  if (JOB || busy) { geomsg("Another sightline is being generated.", "bad", "busy"); return {status: "error", message: "another sightline is being generated"}; }
+  if (kind === "geometry") {
+    const loc = findLocal(body);
+    if (loc) {
+      geomsg(`Loaded ${loc.id} from the library.`, "good", "ready");
+      await select(loc.id, false, "job"); if (fromBridge) showTab("spectra");
+      return {status: "ready", id: loc.id};
+    }
+  }
+  busy = true; setGeoEnabled();
+  try {
+    if (!activeIsFire()) {
+      if (!API) { geomsg("Contacting the sightline server", "", "contacting"); await discover(8000, true); }
+      if (API && galSrv()) {
+        geomsg("Submitting", "", "submitting");
+        let r = null, j = {};
+        try { r = await fetch(gq(API + (kind === "custom" ? "/api/sightlines/custom" : "/api/sightlines")), {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+          j = await r.json().catch(() => ({})); }
+        catch { backendFailed(); r = null; }
+        if (r) {
+          const d = j.detail, det = typeof d === "string" ? d : Array.isArray(d) ? d.map(x => x.msg).join("; ") : "";
+          if (r.status === 429) { const ra = +r.headers.get("Retry-After");
+            const m = `Rate limit reached${ra ? `; try again in ${ra < 120 ? ra + " s" : Math.ceil(ra / 60) + " min"}` : ""}.`;
+            geomsg(m, "bad", "rate_limit"); return {status: "error", message: m}; }
+          if (r.ok) {
+            if (j.status === "ready") { upsert(j.entry || {id: j.id}, false); catalogChanged(); geomsg(`Loaded ${j.id} (already computed).`, "good", "ready");
+              await select(j.id, false, "job"); if (fromBridge) showTab("spectra"); return {status: "ready", id: j.id}; }
+            busy = false; track(j, kind, fromBridge);
+            return {status: "queued", id: j.id, job_id: j.job_id, position: j.position ?? null};
+          }
+          if (r.status !== 400 && r.status !== 404 && r.status !== 503 && !vizCfg()) {
+            const m = "Rejected: " + (det || `HTTP ${r.status}`); geomsg(m, "bad", "server_" + r.status); return {status: "error", message: m};
+          }
+        }
+      }
+    }
+    if (vizCfg()) {
+      try { return await castCubeRay(kind, body, fromBridge); }
+      catch (x) { progress(null); const m = "Generation failed: " + (x && x.message || "could not cast ray"); geomsg(m, "bad", "job_error"); return {status: "error", message: m}; }
+    }
+    if (!API) return {status: "error", offline: true, message: "no sightline server is online"};
+    if (!galSrv()) { geomsg(`The sightline server serves only the default galaxy; ${activeNoun()} ${GAL} has library sightlines only.`, "bad", "galaxy_unsupported");
+      return {status: "error", offline: true, message: `the sightline server does not serve ${activeNoun()} ${GAL}`}; }
+    return {status: "error", offline: true, message: "could not cast sightline"};
+  } finally { busy = false; setGeoEnabled(); }
+}
+$("#geo").addEventListener("submit", async ev => {
+  ev.preventDefault(); if (JOB || busy) { geomsg("Another sightline is being generated.", "bad", "busy"); return; }
+  let g; try { g = readGeom(); } catch (x) { geomsg(x.message, "bad", x.code || "invalid"); return; }
+  const r = await submitJob("geometry", g, false); if (!r.offline) return;
+  const e = findLocal(g); if (e) { geomsg(`Loaded ${e.id} from the library (server offline).`, "good", "offline_library"); select(e.id, false, "gallery"); }
+  else geomsg(PUBLIC || overrides().length ? "No sightline server is online, and this geometry is not in the library. Pick a library sightline, or try again later."
+    : "This build has no public sightline server, and this geometry is not in the library. Pick a library sightline, or run the server locally (deploy/laptop).", "bad", "offline_not_in_library");
+});
+function track(j, kind = "geometry", fromBridge = false) {
+  JOB = {job_id: j.job_id, id: j.id, kind, done: false}; setGeoEnabled(); progress("queued", 0, j.position); geomsg(`Queued ${j.id}${j.position ? " at position " + j.position : ""}.`, "", "queued");
+  emit("tng:submitted", {job_id: j.job_id, id: j.id, kind}); emit("tng:job", {job_id: j.job_id, id: j.id, status: "queued", stage: "queued", frac: 0});
+  const job = JOB, base = `${API}/api/jobs/${encodeURIComponent(j.job_id)}`, api = API, jg = GAL; let es = null, pollT = null, slowT = null;
+  const finish = () => { job.done = true; es && es.close(); clearTimeout(pollT); clearInterval(slowT); JOB = null; setGeoEnabled(); };
+  let lastStage = null;
+  const onProg = d => { const stg = d.stage || "load"; progress(stg, d.frac, null); if (d.msg && stg !== lastStage) geomsg(d.msg, "", "progress"); lastStage = stg;
+    emit("tng:job", {job_id: job.job_id, id: job.id, status: "running", stage: stg, frac: +d.frac || 0}); };
+  const onDone = async d => { if (job.done) return; finish(); progress("save", 1); const id = d.id || job.id;
+    if (jg !== GAL) { geomsg(`Generated ${id} for subhalo ${jg}; switch back to it to see the ray.`, "", "job_done"); setTimeout(() => progress(null), 1500); return; }
+    upsert(d.entry || {id}, false); if (d.components) { const raw = normComps(d.components, d.comp_keys || DEF_KEYS, d.components.aod || d.aod); if (raw) COMPRAW.set(id, raw); }
+    catalogChanged();
+    try { const buf = await fetchBin(gq(`${api}/api/sightline/${id}.bin`)); IDB.put(idbKey(id), {entry: strip(CAT.get(id)), bin: buf, galaxy: GAL}); putSight(id, decodeTNGS(buf, reg.KEYS)); } catch { /* loaded on select */ }
+    geomsg(`Generated ${id}.`, "good", "job_done"); note(`generated ${id}`, "good"); setTimeout(() => progress(null), 1500);
+    emit("tng:done", {job_id: job.job_id, id, entry: strip(CAT.get(id) || {id})});
+    await select(id, false, "job"); if (kind === "custom" || fromBridge) showTab("spectra"); };
+  const onErr = m => { if (job.done) return; finish(); progress(null); geomsg("Generation failed: " + (m || "unknown error"), "bad", "job_error");
+    emit("tng:error", {job_id: job.job_id, id: job.id, message: m || "unknown error"}); };
+  const fromJob = s => { if (s.status === "done") onDone({id: s.id, entry: s.entry, components: s.components}); else if (s.status === "error") onErr(s.error || s.msg);
+    else if (s.status === "queued") progress("queued", 0, s.position); else onProg(s); };
+  async function poll() { if (job.done) return;
+    try { const r = await fetch(base, {cache: "no-store"}); if (r.status === 404) return onErr("job not found on the server"); if (r.ok) fromJob(await r.json()); } catch { /* retry */ }
+    if (!job.done) pollT = setTimeout(poll, 2000); }
+  const fallback = () => { if (job.done || pollT) return; es && es.close(); es = null; poll(); };
+  try { es = new EventSource(base + "/events");
+    es.addEventListener("queued", ev => { try { progress("queued", 0, JSON.parse(ev.data).position); } catch { /* ignore */ } });
+    es.addEventListener("progress", ev => { try { onProg(JSON.parse(ev.data)); } catch { /* ignore */ } });
+    /* multi-galaxy server: a custom ray in a galaxy whose cutout is not cached waits while the cutout is fetched */
+    es.addEventListener("preparing", ev => { try { const d = JSON.parse(ev.data); progress("queued", 0, null);
+      geomsg(d.msg || `Preparing subhalo ${d.galaxy}: fetching its gas cutout`, "", "preparing");
+      emit("tng:job", {job_id: job.job_id, id: job.id, status: "preparing", stage: "queued", frac: 0}); } catch { /* ignore */ } });
+    es.addEventListener("done", ev => { try { onDone(JSON.parse(ev.data)); } catch { fallback(); } });
+    es.addEventListener("error", ev => { if (ev.data) { try { onErr(JSON.parse(ev.data).message); } catch { onErr(ev.data); } } else fallback(); });
+  } catch { fallback(); }
+  slowT = setInterval(async () => { if (job.done || pollT) return;
+    try { const r = await fetch(base, {cache: "no-store"}); if (r.ok) { const s = await r.json(); if (s.status === "done" || s.status === "error") fromJob(s); } } catch { /* ignore */ } }, 10000);
+}
+
+/* ---------------- downloads ---------------- */
+function save(blob, name) { sfx("success"); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
+/* C2 (code 3): the server figure gets the page layout ("1", "2R", "2SN" or "4", tngsight.figure.cases_for) and a
+   window inside the server's caps. A server that announces them in /api/health ("figure": {layouts, v_max_kms}, the
+   damped H I window) renders the page view, its renderer clamping the window to the lines' coverage as the page
+   does; an older server gets its fixed 1500 km/s caps and no layout (it rendered the 2x2 grid), so it never 422s */
+function figureBody(fmtx) {
+  const F = HEALTH && HEALTH.figure, vm = F && +F.v_max_kms > 0 ? +F.v_max_kms : 1500;
+  const vhw = clamp(Math.round(S.vhw), 10, vm), vc = clamp(Math.round(S.vc), -vm, vm);
+  const b = {id: S.id, ions: S.ions.slice(0, 6), R: Object.fromEntries(bandsOf(reg, S.ions).map(k => [k, S.R[k]])), sn: S.sn,
+    vhw, vc, intrinsic: S.intr, seed: S.seed, fmt: fmtx};
+  if (F && Array.isArray(F.layouts) && F.layouts.includes(S.layout)) b.layout = S.layout;
+  return b;
+}
+async function download(fmtx) {
+  closePops(); if (!S.id) return; const name = `${activeIsFire() ? "fire2" : "tng50"}_${GAL}_${S.id}_${S.ions.join("-")}_sn${S.sn.join("-")}`;
+  const e = CAT.get(S.id);
+  const clientFallback = async reason => {
+    try {
+      const E = await import(modUrl("export3d.js"));
+      const blob = await E.exportSpectraPublication($("#cv"), {
+        sim: activeSim(), noun: activeNoun(true), galId: GAL, sightlineId: S.id,
+        vLo: Math.round(S.vc - S.vhw), vHi: Math.round(S.vc + S.vhw)
+      }, fmtx);
+      save(blob, `${name}.${fmtx}`);
+      note(`saved publication ${fmtx.toUpperCase()} (${reason})`, "good");
+    } catch {
+      $("#cv").toBlob(b => b && save(b, `${name}_screen.png`), "image/png");
+    }
+  };
+  /* the server holds the npz of the default galaxy and of rays cast on it, not the library rays of the other galaxies
+     (review2 F3): those get the client-side publication PDF/PNG figure */
+  if (SRV() && !isDefGal() && e && kindOf(e) === "library") {
+    await clientFallback(`library sightline of ${activeNoun()} ${GAL}`); return; }
+  if (SRV()) { note(`rendering the ${fmtx.toUpperCase()} figure`);
+    try { const r = await fetch(gq(API + "/api/figure"), {method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(figureBody(fmtx))});
+      if (!r.ok) throw new Error(r.status === 429 ? "rate limit reached" : "HTTP " + r.status);
+      save(await r.blob(), `${name}.${fmtx}`); note(`${fmtx.toUpperCase()} figure saved; its noise draw differs from the screen`, "good"); return;
+    } catch (x) { await clientFallback(`server unavailable: ${x.message}`); return; } }
+  await clientFallback("client publication renderer");
+}
+$("#dlpng").addEventListener("click", () => download("png")); $("#dlpdf").addEventListener("click", () => download("pdf"));
+
+/* ---------------- tabs, 3D view and its live thumbnail ---------------- */
+const TABS = ["spectra", "3d"];
+function showTab(t, focus) { if (!TABS.includes(t)) return; const prev = S.tab; S.tab = t;
+  for (const k of TABS) { const on = k === t, b = $("#tab-" + k); b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; $("#panel-" + k).hidden = !on; }
+  document.body.dataset.tab = t; closePops(); if (focus) $("#tab-" + t).focus();
+  writeHashSoon();
+  if (t === "3d") open3d().then(autoSheet, () => {}); else draw();
+  autoSheet();
+  if (prev !== t) emit("tng:tab", {tab: t}); }
+const tabSfx = k => { if (S.tab !== k) sfx("select"); };
+for (const k of TABS) { const b = $("#tab-" + k); b.addEventListener("click", () => { tabSfx(k); showTab(k); });
+  b.addEventListener("keydown", ev => { const i = TABS.indexOf(S.tab), n = {ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: TABS.length - 1}[ev.key];
+    if (n == null) return; ev.preventDefault(); const t = TABS[(n + TABS.length) % TABS.length]; tabSfx(t); showTab(t, true); }); }
+uiSound().bind($("#sfx"));
+initLiquidTabs($("#tabs")); initLiquidSeg($("#layout")); initLiquidButtons();
+/* liquid metal background (owner 2026-11-16): on both tabs, behind the 3D stage, the spectra and the control cards (it sits
+   under the page at z-index -1, so it never draws over the volume render or a spectrum; the spectra panel is its calm
+   rectangle). SPECTRA_BG is the single switch for the Spectra tab (off: the spectra keep the static glow background);
+   ?bg=off removes it everywhere. */
+const SPECTRA_BG = true;
+const BG_SPECTRA = SPECTRA_BG || new URLSearchParams(location.search).get("bg") === "on";
+document.body.classList.toggle("lmbg-spectra", BG_SPECTRA);
+initLiquidBg({name: "explorer", showWhen: () => S.tab === "3d" || BG_SPECTRA,
+  calm: () => (S.tab === "spectra" ? $("#panel-spectra") : null), observe: [$("#panel-spectra"), $("#v3d-stage")],
+  /* never cost the 3D view: a static frame when viewer3d's calibration found its exact moving frame over 33 ms (it fell back to
+     the fast path: a weak GPU); liquidbg.js also freezes itself when the page's median frame interval passes 20 ms */
+  heavy: () => S.tab === "3d" && window.tngViewer3d?.stats?.calibration?.moving_path === "fast"});
+let V3P = null, V3 = null, THUMB = null;
+function vizCfg() {
+  if (!CFG.viz) return null;
+  const q = isDefGal() ? new URLSearchParams(location.search).get("viz") : null;    /* a ?viz= override names the default galaxy's cubes */
+  if (q) { try { const u = new URL(q.replace(/\/?$/, "/"), location.href);
+    const ok = u.origin === location.origin || u.origin === "https://huggingface.co" || /^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(u.origin);
+    if (ok) return {...CFG.viz, base: u.href, fallback_base: null, manifest_override: u.href + "manifest_v2.json"}; } catch { /* bad override */ } }
+  return {...CFG.viz}; }
+/* one viewer3d engine per page: the full square stage (mount) on the 3D tab and the live thumbnail (mountThumb) in the side
+   column; viewer3d docks the canvas where it is on screen and builds the grouped controls (#v3-ctl) in #v3d-controls */
+const loadV3 = () => Promise.all([import(modUrl("viewer3d.js")), import(modUrl("picker.js"))]);
+/* perf R5: warm the connection to the cube host when the 3D tab or the thumbnail is hovered or opened */
+let hfHint = false;
+function hintCubes() { if (hfHint || !CFG.viz) return; hfHint = true;
+  let o = "https://huggingface.co"; try { o = new URL(vizCfg().base, location.href).origin; } catch { /* default host */ }
+  for (const [rel, href] of [["preconnect", o], ["dns-prefetch", "https://us.aws.cdn.hf.co"]]) { if (href === location.origin) continue;
+    const l = document.createElement("link"); l.rel = rel; l.href = href; if (rel === "preconnect") l.crossOrigin = "anonymous"; document.head.appendChild(l); } }
+for (const el of [$("#tab-3d"), $("#v3d-mini")]) el.addEventListener("pointerenter", hintCubes, {passive: true});
+/* perf R5: on the low device tier (software or weak GL, little memory, slow network) the 3D tab shows a still and a button
+   instead of starting the engine (which could hold the main thread for minutes on software GL); FORCE3D is the button,
+   or a programmatic request (tngApp.show3d) */
+let FORCE3D = false;
+function poster3d() {
+  const root = $("#v3d-root"); $("#v3d-wait").hidden = true; if (root.querySelector(".v3d-poster")) return;
+  root.innerHTML = `<div class="v3d-poster" data-testid="v3d-poster"><img src="img/og/explorer.jpg" alt="A TNG50 galaxy's gas in purple and orange, crossed by a quasar sightline" width="1200" height="630" decoding="async">
+    <p class="msg">This device looks slow for the live 3D view, so it shows a still.</p><button type="button" class="pbtn" data-testid="v3d-anyway">Render 3D anyway</button></div>`;
+  root.querySelector("button").addEventListener("click", () => { FORCE3D = true; root.replaceChildren(); $("#v3d-wait").hidden = false; open3d().catch(() => {}); });
+}
+function open3d() {
+  if (V3P) return V3P;
+  hintCubes();
+  V3P = (async () => { try { await GAL_READY; await tierReady();
+      if (tier() === "low" && !FORCE3D) { poster3d(); V3P = null; return null; }
+      const [V, Pk] = await loadV3();
+      const v = await V.mount($("#v3d-root"), window.tngApp, {viz: vizCfg(), controls: $("#v3d-controls")}); V3 = v; window.tngViewer3d = v; $("#v3d-wait").hidden = true;
+      $("#v3d-status").textContent = !v.webgl2 ? "The interactive 3D view is not available here; type a ray's endpoints under Pick ray to generate it."
+        : matchMedia("(pointer: coarse)").matches && !matchMedia("(any-pointer: fine)").matches ? "drag to orbit, pinch to zoom, tap a line" : "drag to orbit, scroll to zoom, click a line, double-click to re-centre";
+      window.tngPicker = Pk.attachPicker(v.webgl2 ? v : null, $("#picker-root"), window.tngApp);
+      if (v.webgl2 && thumbOk()) openThumb();     // the engine is up: the thumbnail shares it at no cost, ready for the Spectra tab
+      return v;
+    } catch (x) { $("#v3d-root").innerHTML = `<p class="msg bad">The 3D view failed to load: ${esc(x.message)}</p>`;
+      const w = $("#v3d-wait"); w.textContent = "The 3D view failed to load"; w.classList.add("bad"); V3P = null; throw x; } })();
+  return V3P; }
+function openThumb() {
+  if (THUMB) return THUMB;
+  /* the canvas goes into #v3d-mini-host (a positioned square inside the #v3d-mini button); the click and the keys stay on
+     #v3d-mini, so no onOpen is passed and the viewer's own nH and 3D tags stay */
+  THUMB = (async () => { try { await GAL_READY; const [V] = await loadV3(); const t = await V.mountThumb($("#v3d-mini-host"), window.tngApp, {viz: vizCfg()});
+      window.tngThumb = t; $("#v3d-mini").classList.add("live"); return t; } catch { THUMB = null; return null; } })();
+  return THUMB; }
+$("#v3d-mini").addEventListener("click", () => showTab("3d"));
+$("#v3d-mini").addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); showTab("3d"); } });
+function build3dField() { /* viewer3d draws its own field buttons (in the ion colours) */ }
+/* the live thumbnail, only where the side column shows it. perf R5: it fetches megabytes of cubes, so it mounts by itself
+   (once the spectra are up and the page has been idle) only on the high device tier over a 4g connection; elsewhere the
+   static art stays until the thumbnail is hovered (mid and high) or the 3D tab is opened */
+let thumbArmed = false;
+const thumbOk = () => CFG.viz && !mqMobile.matches && !document.body.classList.contains("side-off") && !(navigator.connection && navigator.connection.saveData);
+const thumbAuto = () => tier() === "high" && navigator.connection?.effectiveType === "4g";
+function armThumb() { thumbArmed = true;
+  const go = () => { if (thumbOk() && thumbAuto()) openThumb(); };
+  setTimeout(() => tierReady().then(() => (window.requestIdleCallback ? requestIdleCallback(go, {timeout: 4000}) : go())), 1500); }
+$("#v3d-mini").addEventListener("pointerenter", () => { if (thumbOk() && tier() !== "low") openThumb(); }, {passive: true});
+
+/* ---------------- galaxy sample: picker and switching (js/galaxies.js) ---------------- */
+const GPICK = GIX ? createGalaxyPicker({pop: $("#gxy-pop"), cur: $("#gxy-cur"), search: $("#gxy-search"), filter: $("#gxy-filter"), head: $("#gxy-head"),
+  list: $("#gxy-list"), count: $("#gxy-count")}, {index: GIX, current: () => GAL, onPick: id => { closePops(); sfx("select"); switchGalaxy(id, {source: "picker"}); }}) : null;
+if (GPICK && $("#gxy-sim")) initLiquidSeg($("#gxy-sim"));
+const LAST_BY_SIM = {tng50: GIX?.default ?? 488530, fire2: "m12i"};
+let topSimEl = null;
+if (GIX && new Set(GIX.list.map(e => e.simKey)).size > 1 && $("#grp-gal") && !$("#top-sim")) {
+  topSimEl = document.createElement("div");
+  topSimEl.id = "top-sim";
+  topSimEl.className = "seg";
+  topSimEl.setAttribute("role", "radiogroup");
+  topSimEl.setAttribute("aria-label", "Simulation");
+  topSimEl.innerHTML = [
+    ["tng50", "TNG50", "Switch to IllustrisTNG TNG50-1 galaxies"],
+    ["fire2", "FIRE-2", "Switch to FIRE-2 zoom-in halos"]
+  ].map(([v, lab, tip], i) => `<label><input type="radio" name="top-sim" value="${v}" data-tip="${tip}"${i === 0 ? " checked" : ""}><span>${lab}</span></label>`).join("");
+  const grpGal = $("#grp-gal"), gxyOpen = $("#gxy-open");
+  if (gxyOpen) grpGal.insertBefore(topSimEl, gxyOpen); else grpGal.prepend(topSimEl);
+  initLiquidSeg(topSimEl);
+  topSimEl.addEventListener("change", ev => {
+    const sk = ev.target?.value;
+    if (!sk || (sk === "fire2") === activeIsFire()) return;
+    sfx("select");
+    if (GPICK) GPICK.setSim(sk);
+    const target = (LAST_BY_SIM[sk] && GIX.byId.has(LAST_BY_SIM[sk])) ? LAST_BY_SIM[sk]
+      : (sk === "fire2" && GIX.byId.has("m12i") ? "m12i" : GIX.list.find(e => e.simKey === sk)?.id);
+    if (target != null && target !== GAL) switchGalaxy(target, {source: "sim-switch"});
+  });
+}
+const activeSim = () => String((GIX && GIX.byId.get(GAL)?.sim) || CFG.galaxy?.sim || (isFire({id: GAL}) ? "FIRE-2" : "TNG50-1"));
+const activeIsFire = () => /^FIRE/i.test(activeSim());
+const activeNoun = (cap = false) => (activeIsFire() ? (cap ? "Halo" : "halo") : (cap ? "Subhalo" : "subhalo"));
+function galaxyUI() {
+  const fire = activeIsFire(), ttl = $("#title"), sk = fire ? "fire2" : "tng50";
+  if (GAL != null) LAST_BY_SIM[sk] = GAL;
+  if (ttl) ttl.textContent = fire ? "FIRE-2 sightlines" : "TNG50 sightlines";
+  const cf = $("#credits-foot span");
+  if (cf) cf.textContent = fire ? "Simulation: FIRE-2 (FIRE Collaboration)" : "Simulation: IllustrisTNG TNG50-1 (TNG Collaboration)";
+  if (topSimEl) for (const r of topSimEl.querySelectorAll('input[name="top-sim"]')) r.checked = r.value === sk;
+  const grp = $("#grp-gal"); if (!grp) return; grp.hidden = !GIX; if (!GIX) return;
+  const e = GIX.byId.get(GAL), b = $("#gxy-open"), lab = b.querySelector(".glab");
+  lab.textContent = String(GAL); lab.dataset.id = String(GAL);
+  b.dataset.tip = `${fire ? `FIRE-2 halo ${GAL}` : `Subhalo ${GAL}`}, ${e && e.n ? e.n + " sightlines" : "this galaxy"}; click to pick another`;
+  b.setAttribute("aria-label", `Galaxy: ${fire ? `FIRE-2 halo ${GAL}` : `subhalo ${GAL}`}. Pick another galaxy`);
+  document.body.dataset.galaxy = String(GAL);
+  document.body.dataset.sim = sk;
+}
+/* the provenance chip in the plot footer (visible on phones too, review2_ux S3): the galaxy id and its spectra source;
+   a click opens Data and methods, whose spectra paragraphs follow the source */
+function sourceUI() {
+  const bar = $("#bar"); if (!bar) return;
+  let chip = $("#src-chip");
+  if (!chip) { chip = document.createElement("button"); chip.type = "button"; chip.id = "src-chip"; chip.className = "tag"; chip.dataset.testid = "spectra-source";
+    chip.setAttribute("aria-haspopup", "dialog"); chip.style.cssText = "flex:none;white-space:nowrap;cursor:pointer;background:none;font-family:inherit";
+    chip.addEventListener("click", ev => { ev.stopPropagation(); const pop = $("#pop-methods"); if (pop) { if (pop.hidden) openPop(chip, pop); else closePops(); } });
+    bar.insertBefore(chip, bar.firstChild); }
+  const sbi = srcOf(SRC) === "sbi", gid = GAL ?? CFG.galaxy?.subhalo_id, fire = activeIsFire(), noun = fire ? `FIRE-2 halo ${gid}` : `Subhalo ${gid}`;
+  chip.textContent = `${GIX && gid != null ? gid + "  " : ""}${sbi ? "THOR" : "Trident"}${GFLAGS.gas_poor ? "  gas-poor" : ""}`;
+  chip.dataset.tip = sbi ? `${noun}: THOR rays through the Voronoi mesh, CLOUDY FG11 ions; click for details`
+    : `${noun}: Trident HM2012 spectra, ±R200c; click for details`;
+  chip.setAttribute("aria-label", `${noun}, spectra source ${sbi ? "THOR" : (SRC.label || "Trident")}. Open data and methods`);
+  methodsText(sbi);
+}
+const MEL = {}, MTX = {};
+function methodsText(sbi) {
+  const ag = $("#about-gal"); if (!ag) return;
+  if (!("tau" in MEL)) { const n = ag.nextElementSibling; MEL.tau = n && !n.id && /Trident/.test(n.textContent) ? n : null;
+    MEL.ions = $("#methods-ions"); MEL.atomic = $("#methods-atomic");
+    MEL.lic = $("#lic-spectra"); MEL.lic2 = MEL.lic && MEL.lic.nextElementSibling;
+    MEL.simTng = $("#lic-sim-tng"); MEL.simFire = $("#lic-sim-fire");
+    const pv = document.createElement("p"); pv.id = "methods-source"; pv.hidden = true; ag.after(pv); MEL.src = pv; }
+  const fire = activeIsFire();
+  const SBI_TXT = {
+    tau: "Optical depths from a GPU Voigt renderer (fp64) at 0.5 km/s over ±1500 km/s, resampled by velocity; sightlines ±2 R200c long. Velocities are relative to the galaxy's systemic velocity.",
+    ions: "Spectra: rays through the TNG50 Voronoi mesh traced by THOR (Byrohl & Nelson 2025, arXiv:2507.11603), ion fractions from CLOUDY (Ferland et al. 2017) with the FG11 UV background (Faucher-Giguère et al. 2009) and Rahmati et al. (2013) self-shielding for H I. 3D ion cubes: Trident HM2012 (H I from the TNG neutral fraction) within r ≤ 400 kpc, so a sightline drawn through a cube can differ from its spectrum by a few tenths of a dex.",
+    atomic: "Atomic data: the profile components (H I Lyα Γ = 6.265 × 10⁸ s⁻¹, Wiese and Fuhr 2009); the catalogue fits and your in-browser refits use the same f and Γ. Saturated components are lower limits."};
+  const FIRE_IONS = "H I: FIRE-2 neutral hydrogen fraction (self-shielding included); metal ions: Trident HM2012 table with tracked FIRE-2 element abundances.";
+  /* Data and credits: both simulation and spectra paragraphs are shown; the ones that apply to this galaxy lead with "This galaxy" */
+  for (const [el, on] of [[MEL.lic, !sbi], [MEL.lic2, sbi], [MEL.simTng, !fire], [MEL.simFire, fire]]) { if (!el) continue; let t = el.querySelector(".cur-l");
+    if (on && !t) { t = document.createElement("strong"); t.className = "cur-l"; t.textContent = "This galaxy: "; el.prepend(t); } else if (!on && t) t.remove(); }
+  for (const k of ["tau", "ions", "atomic"]) { const el = MEL[k]; if (!el) continue; if (!(k in MTX)) MTX[k] = el.innerHTML;
+    if (sbi) el.textContent = SBI_TXT[k]; else if (k === "ions" && fire) el.textContent = FIRE_IONS; else el.innerHTML = MTX[k]; }
+  MEL.src.hidden = !sbi; MEL.src.textContent = sbi ? (SRC.text || "") : "";
+}
+function aboutText() {
+  const g = CFG.galaxy || {}; if (!g.R200c_kpc) return;
+  const sim = g.sim || activeSim() || "TNG50-1", fire = /^FIRE/i.test(sim), gid = g.subhalo_id ?? GAL;
+  $("#about-gal").textContent = `Sightlines through the circumgalactic medium of one ${sim} galaxy (${fire ? "halo" : "subhalo"} ${gid} at z = ${g.redshift ?? 0}, R200c ${nf.format(Math.round(+g.R200c_kpc))} kpc${g.M200c_Msun ? `, M200c ${(+g.M200c_Msun / 1e12).toFixed(2)}e12 solar masses` : ""}), labelled by orientation, impact parameter b and azimuth from the projected major axis.`;
+}
+/* the 3D engine is per galaxy (its cubes, frame and lines): dispose it and remount on demand (the tab, or the thumbnail
+   where it was live). viewer.dispose() also removes its control column with the #picker-root it adopted: put one back */
+async function reset3d() {
+  const hadThumb = !!THUMB; if (!V3P && !THUMB) return;
+  try { const V = await import(modUrl("viewer3d.js")), cur = V.current(); if (cur) { const v = await cur.catch(() => null); v?.dispose(); } } catch { /* no engine */ }
+  V3P = V3 = THUMB = null; window.tngViewer3d = window.tngThumb = window.tngPicker = null;
+  $("#v3d-mini").classList.remove("live"); $("#v3d-mini-host").replaceChildren(); $("#v3d-root").replaceChildren(); $("#v3d-status").textContent = "";
+  const w = $("#v3d-wait"); w.hidden = false; w.textContent = "Loading the 3D view"; w.classList.remove("bad");
+  if (!$("#picker-root")) { const p = document.createElement("div"); p.id = "picker-root"; $("#v3d-controls").insertBefore(p, $("#v3d-status")); }
+  if (S.tab === "3d") open3d().catch(() => {}); else if (hadThumb && thumbOk()) openThumb();
+}
+/* switch the page to galaxy id: fetch its catalogue (and galaxy.json) first, so a missing pack leaves the page as it was; then
+   drop every per-galaxy cache (catalogue, spectra, degraded panels, components, fits by tag), remount 3D, and open the
+   sightline that matches the current one (same id if the new galaxy has it, else the nearest in orientation, b/R200c and
+   azimuth: SBI_CGM galaxies have their own Sobol rays, so ids are not shared; review2_ux S1) */
+let GTOK = 0;
+async function switchGalaxy(id, {want = null, source = "picker"} = {}) {
+  id = normId(id);
+  if (!GIX || !GIX.byId.has(id)) return false; if (id === GAL) return true;
+  if (JOB) { note("a sightline is being generated; switch galaxies when it is done", "bad"); return false; }
+  const tok = ++GTOK, pack = packFor(GIX, id, LEGACY), b = $("#gxy-open"), targetNoun = isFire(GIX.byId.get(id)) ? "halo" : "subhalo";
+  b.dataset.state = "loading"; note(`loading ${targetNoun} ${id}`);
+  let cat, gj = null;
+  try { const [r, g] = await Promise.all([fetch(pack.catalog_url), galaxyJson(pack)]); if (!r.ok) throw new Error("HTTP " + r.status); cat = await r.json(); gj = g; }
+  catch (x) { if (tok === GTOK) { delete b.dataset.state; note(`could not load ${targetNoun} ${id}: ${x.message}`, "bad"); } return false; }
+  if (tok !== GTOK) return false;
+  const keep = want || S.id, prevE = CAT.get(S.id) || null, prevR = +(CFG.galaxy && CFG.galaxy.R200c_kpc) || +(GIX.byId.get(GAL)?.R200c) || 0;
+  GAL = id; applyPack(pack, gj); GAL_READY = Promise.resolve(); setSource(cat);
+  CAT.clear(); SIGHT.clear(); SIGHT_LOAD.clear(); SIGHT_FAIL.clear(); DG.clear(); dgBytes = 0; COMPRAW.clear(); CIX = null; NOCOMP.clear(); FIT.res.clear();
+  for (const e of cat.entries || []) upsert(e, true);
+  const cached = await IDB.all(); if (Array.isArray(cached)) for (const c of cached) if (c && c.entry && (c.galaxy ?? GIX.default) === GAL && !CAT.has(c.entry.id)) upsert(c.entry, false);
+  if (tok !== GTOK) return false;
+  delete b.dataset.state; galaxyUI(); aboutText(); catalogChanged(); GPICK.render();
+  S.id = null; pendingId = null;
+  const R = +CFG.galaxy?.R200c_kpc || +(GIX.byId.get(id)?.R200c) || 0, ents = [...CAT.values()];
+  const near = !CAT.has(keep) && prevE && prevR > 0 ? nearestSightline(ents, prevE, +prevE.b_kpc / prevR, R) : null;
+  const first = CAT.has(keep) ? keep : near ? near.id : isDefGal() && CAT.has(CFG.defaults.id) ? CFG.defaults.id
+    : defaultSightline(ents, R)?.id || sorted()[0]?.id;
+  reset3d();
+  if (first) await select(first, true, "galaxy"); else { status(); draw(); }
+  writeHash(); emit("tng:galaxy", {id, source, n: CAT.size});
+  note(`${activeNoun()} ${id}: ${CAT.size} sightlines`); bcatFor = null;
+  if (source === "picker" && document.activeElement === document.body) $("#gxy-open")?.focus({preventScroll: true});   /* S4: keep keyboard focus */
+  return true;
+}
+
+/* ---------------- Find, Ask ---------------- */
+let FINDP = null;
+/* one line of help per Find field (the form is built by search.js) */
+const FIND_TIPS = {fq_ion: "Ion whose fitted components are searched",
+  fq_n_lo: "Fewest matching components per sightline", fq_n_hi: "Most matching components per sightline",
+  fq_sep_lo: "A matching pair must be at least this far apart, km/s", fq_sep_hi: "A matching pair must be at most this far apart, km/s",
+  fq_logN_lo: "Lowest column density, log10 cm⁻²; saturated fits count as lower limits", fq_logN_hi: "Highest column density, log10 cm⁻²; leave empty to keep saturated fits",
+  fq_b_lo: "Components with Doppler b below this do not match, km/s", fq_b_hi: "Components with Doppler b above this do not match, km/s",
+  fq_bkpc_lo: "Smallest sightline impact parameter, kpc", fq_bkpc_hi: "Largest sightline impact parameter, kpc",
+  fq_orient: "Sightline orientation relative to the disk", fq_sort: "Rank by match score, impact parameter or component count"};
+function tipFind() { for (const [id, t] of Object.entries(FIND_TIPS)) { const e = document.getElementById(id); if (e) e.dataset.tip = t; } }
+function mountFind() { if (FINDP) return; FINDP = import(modUrl("search.js")).then(m => { const r = m.mountFind($("#find-body"), window.tngApp); tipFind(); return r; })
+  .catch(x => { FINDP = null; $("#find-body").insertAdjacentHTML("beforeend", `<p class="msg bad">Search failed to load: ${esc(x.message)}</p>`); }); }
+let CHAT = null;
+$("#chat-open").hidden = !(CFG.chat && CFG.chat.enabled);
+$("#chat-open").addEventListener("click", async () => { backendCatalog(); try { if (!CHAT) { const m = await import(modUrl("chat.js")), root = $("#chat-root"); root.hidden = false;
+    CHAT = await m.mount(root, window.tngApp, {opener: $("#chat-open")}); } CHAT.open && CHAT.open(); } catch (x) { CHAT = null; note("the chat could not be loaded: " + x.message, "bad"); } });
+
+/* ---------------- side column (collapsible, remembered) and the phone drawer ---------------- */
+function setSide(on) { document.body.classList.toggle("side-off", !on); const b = $("#side-toggle"); b.setAttribute("aria-expanded", String(on));
+  const t = on ? "Hide the side column" : "Show the side column"; b.setAttribute("aria-label", t); b.dataset.tip = t; b.setAttribute("aria-pressed", String(!on));
+  store.set("tngsight.side", on ? "1" : "0"); draw(); if (on && thumbArmed) armThumb(); }
+$("#side-toggle").addEventListener("click", () => setSide(document.body.classList.contains("side-off")));
+/* B_fix F3: opening the drawer moves the focus into it (its Done button); closing it with Esc or Done returns the focus
+   to the button that opened it (the dock's Controls on phones).
+   Phones (<= 820 px): the drawer is a non-modal bottom sheet, #side on the Spectra tab and the viewer's #v3-ctl on the 3D
+   tab. It opens to "peek" (Spectra 40 % of the height; 3D the room under the full-width stage, 28-50 %), where the content
+   above stays visible, scrollable and live, and snaps to "full" (85 %) by a drag or a tap on its head. The 3D tab opens it
+   to peek by default, so the half under the stage is never empty, until the user closes it. */
+const BODY = document.body;
+const sheetEl = () => (S.tab === "3d" && $("#v3-ctl")) || $("#side");
+const doneEl = () => (S.tab === "3d" && $("#v3-ctl .v3c-done")) || $("#side-done");
+let snap = "peek", closed3d = false, sheetOpener = null;
+const peekH = () => { const ih = innerHeight; if (S.tab !== "3d") return Math.round(ih * 0.4);
+  return Math.round(Math.min(ih * 0.5, Math.max(ih * 0.28, ih - 98 - $("#panel-3d").clientWidth))); };   // 98: the bar, the shell padding and the status row (page.css)
+const fullH = () => Math.round(innerHeight * 0.85);
+function setSheet(h) { BODY.style.setProperty("--sheet-h", h + "px");
+  if (S.tab === "3d") BODY.style.setProperty("--fit-h", peekH() + "px");   // the stage keeps its peek size under an expanded sheet: covered, never moved
+  else BODY.style.setProperty("--spec-pad", Math.max(0, Math.round(h - (innerHeight - $("#spectra").getBoundingClientRect().bottom)) + 8) + "px"); }
+function snapTo(s) { snap = s; BODY.dataset.sheet = s; setSheet(s === "full" ? fullH() : peekH());
+  for (const g of $$(".grab")) g.setAttribute("aria-expanded", String(s === "full")); }
+function toggleDrawer(on, focus = false, opener = null) { const was = BODY.classList.contains("ctl-open"), o = BODY.classList.toggle("ctl-open", on);
+  for (const b of [$("#controls-open"), $("#dock-open")]) b.setAttribute("aria-expanded", String(o));
+  if (o && !was) { sheetOpener = opener; if (mqMobile.matches) snapTo("peek"); }
+  else if (o && mqMobile.matches) snapTo(snap);     // the tab changed under an open sheet
+  if (!o) delete BODY.dataset.sheet;
+  if (focus && was && !o && S.tab === "3d") closed3d = true;
+  if (focus && o) { store.set(DOCK_SEEN, "1"); $("#dock").classList.remove("hint"); }
+  if (!o) dockRead();
+  if (focus && o && !was) setTimeout(() => doneEl().focus({preventScroll: true}), 0);
+  else if (focus && !o && was) { const b = sheetOpener && sheetOpener.getClientRects().length ? sheetOpener : mqMobile.matches ? $("#dock-open") : $("#controls-open"); b.focus({preventScroll: true}); } }
+$("#controls-open").addEventListener("click", ev => { ev.stopPropagation(); toggleDrawer(undefined, true, ev.currentTarget); });
+$("#dock-open").addEventListener("click", ev => { ev.stopPropagation(); toggleDrawer(true, true, ev.currentTarget); });
+$("#side-done").addEventListener("click", () => toggleDrawer(false, true));
+/* drag a sheet by its head (pointer events): it follows the finger, then snaps to the nearer of peek and full, or closes
+   below 60 % of peek; a tap toggles peek and full; the head's .grab button does the same from the keyboard */
+function sheetHandle(head) {
+  if (!head || head.__sheet) return; head.__sheet = true;
+  head.addEventListener("pointerdown", ev => {
+    if (!mqMobile.matches || ev.button > 0 || ev.target.closest("button:not(.grab),input,select,a")) return;
+    const y0 = ev.clientY, h0 = sheetEl().getBoundingClientRect().height, f = fullH(); let moved = false;
+    head.setPointerCapture(ev.pointerId); BODY.classList.add("sheet-drag");
+    const move = e => { if (Math.abs(e.clientY - y0) > 6) moved = true; if (moved) BODY.style.setProperty("--sheet-h", Math.round(Math.min(f, Math.max(60, h0 + y0 - e.clientY))) + "px"); };
+    const up = e => { head.removeEventListener("pointermove", move); head.removeEventListener("pointerup", up); head.removeEventListener("pointercancel", up);
+      BODY.classList.remove("sheet-drag"); const h = h0 + y0 - e.clientY, p = peekH();
+      if (!moved) snapTo(snap === "full" ? "peek" : "full");
+      else if (h < p * 0.6) toggleDrawer(false, true); else snapTo(h > (p + f) / 2 ? "full" : "peek"); };
+    head.addEventListener("pointermove", move); head.addEventListener("pointerup", up); head.addEventListener("pointercancel", up); });
+  head.querySelector(".grab").addEventListener("click", ev => { if (ev.detail === 0) snapTo(snap === "full" ? "peek" : "full"); });   // keyboard only: a pointer tap is handled above
+}
+sheetHandle($("#side-head"));
+/* the 3D tab: peek by default once the viewer's controls exist (after mount, or on coming back), until the user closes it */
+function autoSheet() { if (!mqMobile.matches) return; const c = $("#v3-ctl");
+  if (c) { sheetHandle(c.querySelector(".v3c-head")); c.setAttribute("role", "dialog"); c.setAttribute("aria-modal", "false"); }
+  if (S.tab === "3d") { if (c && !closed3d) toggleDrawer(true); else if (!c) toggleDrawer(false); } else toggleDrawer(false);
+  dockRead(); }
+addEventListener("resize", debounce(() => { if (mqMobile.matches && BODY.classList.contains("ctl-open")) snapTo(snap); }, 120));
+/* the dock: what the controls are set to now, as small stat pairs (value over its name), and a one-time hint */
+const DOCK_SEEN = "tngsight.dock.seen";
+const fmtK = R => (!Number.isFinite(R) ? "–" : R >= 1e4 ? Math.round(R / 1e3) + "k" : R >= 1e3 ? +(R / 1e3).toFixed(1) + "k" : String(Math.round(R)));
+let dockHtml = "";
+function dockRead() { if (!mqMobile.matches) return; let items;
+  if (S.tab === "3d") { const f = $("#v3-species input:checked+span"), m = $('input[name="v3-mode"]:checked');
+    items = [[f ? f.innerHTML.replace("<i></i>", "") : "–", "field"], [m ? esc(m.value) : "–", "mode"]]; }   // f: our own label markup (viewer3d radio)
+  else { const ion = S.ions[0], band = ion && ION[ion] ? ION[ion].band : "uv", R = (S.R?.[band] || S.R?.uv || [])[0], sn = S.sn?.[0], n = (S.ions || []).length;
+    items = [[n, n === 1 ? "line" : "lines"], [fmtK(R), "R"], [Number.isFinite(sn) ? Math.round(sn) : "–", "S/N"]]; }
+  const h = items.map(([v, k]) => `<span class="dk-i"><b>${v}</b><small>${k}</small></span>`).join("");
+  if (h !== dockHtml) $("#dock-read").innerHTML = dockHtml = h;
+  $("#dock-open").hidden = S.tab === "3d" && !$("#v3-ctl");   // the low-tier 3D still has no settings to open
+  $("#dock-open").setAttribute("aria-controls", sheetEl().id); }
+if (!store.get(DOCK_SEEN)) $("#dock").classList.add("hint");
+document.addEventListener("change", () => dockRead());
+setInterval(() => { if (!document.hidden && !BODY.classList.contains("ctl-open")) dockRead(); }, 1000);   // shortcut: catches chat-driven 3D changes; an event from the viewer would be exact
+const mqMobile = matchMedia("(max-width:820px)");
+const HOME = ["#grp-sight", "#grp-lines", "#grp-layout"].filter(s => $(s)).map(s => { const el = $(s); return {el, parent: el.parentNode, next: el.nextSibling}; });   /* #grp-gal stays in #top on phones so TNG50 | FIRE-2 and the galaxy picker work on both Spectra and 3D tabs */
+const tools = document.createElement("div"); tools.className = "grp"; tools.id = "grp-tools"; tools.innerHTML = '<span class="gl">Tools</span><div class="row"></div>';
+const ASK = (el => ({el, parent: el.parentNode, next: el.nextSibling}))($("#chat-open"));
+const INST = $("#side>section[aria-labelledby=h-inst]");
+const TOOL_HOME = ["#req-link", "#find-toggle"].filter(s => $(s)).map(s => { const el = $(s); return {el, parent: el.parentNode, next: el.nextSibling}; });
+const LEARN_HOME = (el => el ? {el, parent: el.parentNode, next: el.nextSibling} : null)($("#cl-learn"));
+function placeControls() {
+  if (mqMobile.matches) { const slot = $("#mobslot"); for (const h of HOME) slot.appendChild(h.el); slot.appendChild(tools); for (const h of TOOL_HOME) { h.el.classList.remove("hide-m"); tools.lastChild.appendChild(h.el); }
+    if (LEARN_HOME) tools.lastChild.appendChild(LEARN_HOME.el);
+    $("#dock").appendChild(ASK.el);       // Ask lives in the phone dock, so it never covers the spectra or the status bar
+    $("#side").insertBefore(INST, $("#mobslot")); $("#side").setAttribute("role", "dialog"); $("#side").setAttribute("aria-modal", "false"); autoSheet(); }   // Instrument first: R and S/N in the peek sheet
+  else { for (const h of HOME) h.parent.insertBefore(h.el, h.next); for (const h of TOOL_HOME) { h.parent.insertBefore(h.el, h.next); h.el.classList.add("hide-m"); }
+    if (LEARN_HOME) LEARN_HOME.parent.insertBefore(LEARN_HOME.el, LEARN_HOME.next);
+    tools.remove(); toggleDrawer(false);
+    ASK.parent.insertBefore(ASK.el, ASK.next); $("#side").insertBefore(INST, $("#v3d-mini").nextSibling); $("#side").removeAttribute("role"); $("#side").removeAttribute("aria-modal");
+    const c = $("#v3-ctl"); if (c) { c.setAttribute("role", "group"); c.removeAttribute("aria-modal"); } }
+  draw(); }
+mqMobile.addEventListener("change", placeControls);
+
+/* ---------------- keyboard ---------------- */
+addEventListener("keydown", ev => { if (ev.target.closest && ev.target.closest("input,select,textarea,[role=tab],#spectra,#v3d-root,.pop,#chat-root")) return;
+  if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  if (ev.key === "j") step(1); else if (ev.key === "k") step(-1); });
+$("#prev").addEventListener("click", () => step(-1)); $("#next").addEventListener("click", () => step(1));
+
+/* ---------------- story entry: hand-off hook into "How an absorption spectrum is made" (explainer v2, U_entry) ----------------
+   Every a[data-story] (the CTA in the plot bar, the hint row, the first-visit card, How to read) opens the story on what
+   is on screen: #g=<subhalo>&ray=<sightline>&ion=<lead ion>&R=<int>&sn=<int>&from=explorer (grammar: the story's
+   js/ui/gate.js parseEntry; story_handoff.mjs checks both ends). The lead ion is the first selected story ion (O VI,
+   then H I), else the first selected line. The hint row is dismissible (remembered); the first-visit card is a .pop
+   opened once, only while no other popover, the drawer or the chat is open, so it never covers another popover. */
+const storyEntry = (() => {
+  const BASE = "learn/how-a-spectrum-is-made/", IONS = ["OVI", "HI"], SEEN = "tngsight.story.seen", HINT = "tngsight.story.hint";
+  const fromStory = /(?:^|[#&])from=story(?:&|$)/.test(location.hash);
+  const galaxy = () => { const h = new URLSearchParams(location.hash.replace(/^#/, "")), q = new URLSearchParams(location.search);
+    const m = String(h.get("g") || q.get("g") || (CFG.galaxy || {}).subhalo_id || "").match(/(\d+)$/); return m ? +m[1] : null; };
+  function hash() {
+    const ion = IONS.find(k => S.ions.includes(k)) || S.ions[0] || null, band = ion && ION[ion] ? ION[ion].band : "uv";
+    const R = (S.R[band] || S.R.uv || [])[0], sn = S.sn[0], g = galaxy(), id = S.id || pendingId, p = [];
+    if (g != null) p.push(`g=${g}`); if (id) p.push(`ray=${encodeURIComponent(id)}`); if (ion) p.push(`ion=${ion}`);
+    if (Number.isFinite(R)) p.push(`R=${Math.round(R)}`); if (Number.isFinite(sn)) p.push(`sn=${Math.round(sn)}`);
+    p.push("from=explorer"); return p.join("&");
+  }
+  const href = () => BASE + "#" + hash();
+  const reqBase = ($("#req-link")?.getAttribute("href") || "../").split("#")[0];
+  function reqHref() {
+    const ion = S.ions[0] || "OVI", band = ion && ION[ion] ? ION[ion].band : "uv";
+    const R = (S.R[band] || S.R.uv || [])[0], sn = S.sn[0], p = [];
+    if (ion) p.push(`ion=${ion}`);
+    if (Number.isFinite(R)) p.push(`R=${Math.round(R)}`);
+    if (Number.isFinite(sn)) p.push(`sn=${Math.round(sn)}`);
+    return reqBase + (p.length ? "#" + p.join("&") : "");
+  }
+  function links() { window.__storyEntry = true; const h = href(), rh = reqHref();
+    for (const a of $$("a[data-story]")) if (a.getAttribute("href") !== h) a.setAttribute("href", h);
+    for (const a of $$("a[data-req]")) if (a.getAttribute("href") !== rh) a.setAttribute("href", rh); }
+  for (const t of ["pointerdown", "focusin", "mouseover"]) document.addEventListener(t, ev => { if (ev.target.closest && ev.target.closest("a[data-story],a[data-req]")) links(); }, true);
+  addEventListener("hashchange", links); addEventListener("tng:instrument", links);
+  const hint = $("#story-hint"), hintX = $("#story-row .sh-x"), card = $("#pop-story"), cta = $("#story-cta");
+  if (hint && hintX && !fromStory && store.get(HINT) !== "0") hint.hidden = hintX.hidden = false;
+  hintX && hintX.addEventListener("click", () => { hint.hidden = hintX.hidden = true; store.set(HINT, "0");
+    const art = $("#story-row .sh-art"); if (art) art.hidden = true; cta && cta.focus({preventScroll: true}); });
+  const later = card && card.querySelector('[data-testid="story-card-later"]');
+  later && later.addEventListener("click", () => { closePops(); cta && cta.focus({preventScroll: true}); });
+  const blocked = () => S.tab !== "spectra" || $$(".pop").some(p => !p.hidden) || document.body.classList.contains("ctl-open") ||
+    document.body.classList.contains("chat-on") || !$("#chat-root").hidden || !cta || !cta.getClientRects().length ||
+    !!(document.activeElement && document.activeElement.closest && document.activeElement.closest("input,select,textarea"));
+  let tries = 0;
+  function maybeCard() {
+    if (!card || fromStory || store.get(SEEN)) return;
+    if (blocked()) { if (++tries < 20) setTimeout(maybeCard, 1500); return; }
+    store.set(SEEN, "1"); links();
+    const g = galaxy(), src = g != null && S.id ? `${BASE}img/poster_${g}_${S.id}_card.webp` : null;
+    // review2 beauty M4: from 640 px up the first visit is inline (a still in the story row and a short glow on the pill),
+    // so it never covers the spectra and the pill stays the only call to action; phones keep the bottom-sheet card
+    if (innerWidth >= 640) {
+      const row = $("#story-row"), art = row && row.querySelector(".sh-art");
+      if (row) row.classList.add("intro");
+      if (art && src) { art.onload = () => { art.hidden = false; requestAnimationFrame(() => art.classList.add("on")); }; art.onerror = () => { art.hidden = true; }; art.src = src; }
+      return;
+    }
+    const img = card.querySelector(".ps-art");
+    if (img && src && !img.src) { img.onload = () => { img.hidden = false; place(cta, card); }; img.onerror = () => { img.hidden = true; };
+      img.src = src; }
+    openPop(cta, card, false); cta.removeAttribute("aria-expanded");   // the CTA is a link, not the card's disclosure button
+  }
+  if (fromStory) store.set(SEEN, "1");
+  // review M6 (beauty): the first-visit card waits until the reader has been idle for 3 s (at least 6 s after ready), so it never
+  // lands on the spectra while they are being read
+  let lastAct = performance.now();
+  for (const ev of ["pointerdown", "wheel", "keydown", "touchstart"]) addEventListener(ev, () => { lastAct = performance.now(); }, {passive: true, capture: true});
+  const idleCard = () => { if (performance.now() - lastAct < 3000) { setTimeout(idleCard, 500); return; } maybeCard(); };
+  addEventListener("tng:ready", () => setTimeout(idleCard, 6000), {once: true});
+  return {links, href, hash, maybeCard};
+})();
+window.tngStoryEntry = storyEntry;
+
+/* ---------------- hash ---------------- */
+function writeHash() { try { history.replaceState(null, "", "#" + galaxyHashPart(GIX, GAL) + formatHash(S, pendingId)); } catch { /* sandboxed */ } storyEntry.links(); }
+const writeHashSoon = debounce(writeHash, 150);
+addEventListener("hashchange", () => {
+  if (GIX) { const g = parseGalaxy(location.hash, location.search, GIX) ?? GIX.default;      /* g=<id> in a pasted or edited URL switches the galaxy */
+    if (g !== GAL && !GIX.byId.has(g)) note(`subhalo ${g} is not in this sample; showing ${activeNoun()} ${GAL}`, "bad");
+    if (g !== GAL && GIX.byId.has(g)) { const N = parseHash(location.hash, reg, S); Object.assign(S, N, {id: S.id, tab: S.tab}); syncAll();
+      switchGalaxy(g, {want: N.id, source: "hash"}).then(() => { if (N.tab !== S.tab) showTab(N.tab); }); return; } }
+  const prev = S.id, tab = S.tab, N = parseHash(location.hash, reg, S), want = N.id;
+  Object.assign(S, N, {id: prev, tab}); clampView(S, vmax()); syncAll();
+  if (N.tab !== tab) showTab(N.tab);
+  if (want && want !== prev) { if (CAT.has(want)) { select(want, false, "hash"); return; } pendingId = want; writeHash(); backendCatalog(); }
+  draw(); });
+function syncAll() { $("#fit").checked = S.fit; $("#intr").checked = S.intr; syncLayoutUI(); buildIons(); inst.build(); }
+
+/* ---------------- window.tngApp v3 bridge (design §6.5) ---------------- */
+const fail = message => ({status: "error", message});
+function getState() { return {id: S.id, ions: S.ions.slice(), layout: S.layout, R: Object.fromEntries(Object.entries(S.R).map(([b, r]) => [b, r.slice()])), sn: S.sn.slice(),
+  vc: S.vc, vhw: S.vhw, seed: S.seed, intrinsic: S.intr, fit: S.fit, tab: S.tab, galaxy: GAL, api: API, warm: !!(HEALTH && HEALTH.warm),
+  job: JOB ? {job_id: JOB.job_id, id: JOB.id, kind: JOB.kind} : null}; }
+/* the chat's page snapshot (chat.js get_page_state and the [page ...] prefix of every question): the open galaxy and its
+   properties, the shown sightline, the tab, the 3D view and the instrument */
+function pageState() {
+  const ge = GIX ? GIX.byId.get(GAL) || null : null, cg = CFG.galaxy || {}, e = S.id ? CAT.get(S.id) : null, v = V3 && V3.webgl2 ? V3 : null;
+  const g = galaxySummary({...(ge || {}), id: GAL ?? cg.subhalo_id, Mstar: ge?.Mstar ?? cg.Mstar_Msun, M200c: ge?.M200c ?? cg.M200c_Msun,
+    R200c: cg.R200c_kpc ?? ge?.R200c, SFR: ge?.SFR ?? cg.SFR_Msun_yr, central: ge?.central ?? cg.central, gas_poor: GFLAGS.gas_poor ?? ge?.gas_poor,
+    src: srcOf(SRC) || ge?.src, n: CAT.size, viz: !!CFG.viz});
+  let tf = null; try { tf = v ? (v.tfOn && v.tfOn() ? v.tfState()?.preset || "custom" : "ramp") : null; } catch { tf = null; }
+  return {n_galaxies: GIX ? GIX.list.length : 1, galaxy: g,
+    sightline: e ? {id: e.id, orientation: e.orientation || null, b_kpc: e.b_kpc ?? null, azimuth_deg: e.azimuth_deg ?? null} : null,
+    tab: S.tab, view3d: v ? {species: v.species || null, mode: v.mode || null, tf} : null,
+    instrument: {R: Object.fromEntries(Object.entries(S.R).map(([b, r]) => [b, r.slice()])), sn: S.sn.slice(), layout: S.layout, ions: S.ions.slice(),
+      vc: S.vc, vhw: S.vhw, fit: !!S.fit},
+    job: JOB ? {id: JOB.id, kind: JOB.kind} : null};
+}
+function applyPatch(P) {
+  for (const k of ["R", "sn", "layout", "ions", "vhw", "vc"]) if (P[k] !== undefined) S[k] = P[k];
+  clampView(S, vmax()); syncAll(); if (P.fit !== undefined) setFit(P.fit); draw(); writeHash(); emit("tng:instrument", {state: getState()}); return getState(); }
+window.tngApp = {
+  version: 3, get config() { return cfgSnap(); },
+  galaxies: () => (GIX ? GIX.list.map(e => ({...e})) : []), galaxy: () => GAL,
+  /* Data and credits (#pop-licence) from another opener, e.g. the 3D stage's ID badge; a second click closes it */
+  openCredits(opener) { const pop = $("#pop-licence"), b = opener || $("#credits-open"); if (!pop || !b) return false;
+    if (!pop.hidden && lastOpener === b) { closePops(); return false; } openPop(b, pop); return true; },
+  async selectGalaxy(id, {source = "chat"} = {}) { return switchGalaxy(normId(id), {source}); },
+  getState, pageState, entries: () => sorted().map(strip), entry: id => (CAT.has(id) ? strip(CAT.get(id)) : null),
+  async select(id, {source = "chat"} = {}) { if (!CAT.has(id)) return false; if (id !== S.id) await select(id, false, source); return true; },
+  setInstrument(o = {}) { return applyPatch(instrumentPatch(o, reg, S, vmaxFor)); },
+  setView(o = {}) { const P = instrumentPatch({...(o.vhw !== undefined ? {vhw: o.vhw} : {}), ...(o.vc !== undefined ? {vc: o.vc} : {})}, reg, S, vmaxFor); return applyPatch(P); },
+  panels() { const L = spectra.panels(); return L.map(({p, rect, visible}) => { const [R, sn] = caseRS(p.ion, p.ci);
+    return {ion: p.ion, case: p.ci, R, snr: sn, seed: panelSeed(p.ion, p.ci), testid: `panel-${p.ion}-${p.ci}`, rect, visible}; }); },
+  async fit(ion, caseIndex = 0) {
+    if (!ION[ion]) throw new RangeError(`ion: unknown ion ${ion}`); if (!casesFor(S.layout)[caseIndex]) throw new RangeError(`case: must be 0 to ${casesFor(S.layout).length - 1} in layout ${S.layout}`);
+    if (!S.id) throw new Error("no sightline selected"); await getSight(S.id); await ensureComps(S.id);
+    const key = enqueueFit(ion, caseIndex); if (FIT.res.has(key)) return FIT.res.get(key);
+    return new Promise(res => { if (!FIT.wait.has(key)) FIT.wait.set(key, []); FIT.wait.get(key).push(res); }); },
+  async submitGeometry(g = {}) {
+    const o = {face: "face-on", "face-on": "face-on", edge: "edge-on", "edge-on": "edge-on", rand: "random", random: "random"}[String(g.orientation || "").toLowerCase()];
+    const b = Number(g.b_kpc), az = Number(g.azimuth_deg), seed = g.seed == null ? null : Number(g.seed);
+    if (!o) return fail("orientation must be face-on, edge-on or random");
+    if (!(b >= 0 && b <= 300)) return fail("b_kpc must be between 0 and 300");
+    if (!(az >= 0 && az <= 360)) return fail("azimuth_deg must be between 0 and 360");
+    if (o === "random" && !(Number.isInteger(seed) && seed >= 0 && seed <= 4294967295)) return fail("random orientation needs an integer seed (0 to 4294967295)");
+    const body = {orientation: o, b_kpc: b, azimuth_deg: az % 360, seed: o === "random" ? seed : null}, r = await submitJob("geometry", body, true);
+    if (!r.offline) return r; const e = findLocal(body);
+    if (e) { await select(e.id, false, "job"); showTab("spectra"); return {status: "ready", id: e.id}; }
+    geomsg("No sightline server is online, and this geometry is not in the library.", "bad", "offline_not_in_library");
+    return fail("no sightline server is online and this geometry is not in the library"); },
+  async submitCustom({p0_kpc, p1_kpc} = {}) { const r = await submitJob("custom", {p0_kpc, p1_kpc}, true);
+    return r.offline ? fail("generating a custom ray needs a sightline server (none is online)") : r; },
+  components, componentsIndex, showTab: t => showTab(t),
+  /* mode: "integral" | "volume" (viewer.setMode); tf: a tf.js preset (viewer.setTf), drawn in volume mode only, so it implies it */
+  async show3d({species, preset, mode, tf} = {}) { FORCE3D = true; showTab("3d"); let v; try { v = await open3d(); } catch (x) { return {ok: false, webgl2: false, message: x.message}; }
+    if (!v.webgl2) return {ok: false, webgl2: false, species: null, preset: null, message: v.message};
+    if (species && !(await v.setSpecies(species))) return {ok: false, webgl2: true, species: v.species, preset: preset || null, mode: v.mode, message: v.loadError && v.loadError.key === species ? `the ${species} volume could not be loaded: ${v.loadError.message}` : v.wanted !== species ? "superseded by a later 3D request" : `the ${species} volume is not available`};
+    const m = tf ? "volume" : mode;
+    if (m && !v.setMode(m)) return {ok: false, webgl2: true, species: v.species, preset: preset || null, mode: v.mode, message: `${v.species || "this field"} has no ${m} view`};
+    if (tf && !v.setTf(tf)) return {ok: false, webgl2: true, species: v.species, preset: preset || null, mode: v.mode, message: `the ${tf} colour preset is not available for ${v.species || "this field"}`};
+    if (preset && !v.setPreset(preset)) return {ok: false, webgl2: true, species: v.species, preset, mode: v.mode, message: v.presetError || "select a sightline first"};
+    let t = null; try { t = v.tfOn && v.tfOn() ? v.tfState()?.preset || "custom" : "ramp"; } catch { t = null; }
+    return {ok: true, webgl2: true, species: v.species, preset: preset || null, mode: v.mode, tf: t}; },
+  _debug: {figureBody, get dgBytes() { return dgBytes; }, get dgSize() { return DG.size; }, dgMax: DG_MAX_BYTES,
+    quality(ion, ci, v) { const r = fitResult(ion, ci), d = S.id && SIGHT.has(S.id) ? dataFor(ion, ci) : null;
+      return (r && r.comps || []).filter(c => v == null || Math.abs(c.v - v) < 1e-6).map(c => ({v: c.v, logN: c.logN, flag: c.flag, ...compQuality(c, ion, r, d)})); },
+    get drawMs() { return spectra.lastMs; }, get nDraw() { return spectra.nDraw; }, draw: () => spectra.draw(), fitMode: () => FIT.mode, fitCache: () => FIT.res.size}
+};
+
+/* ---------------- ux4 features (js/features.js): wiring only ---------------- */
+const FEAT = initFeatures({get S() { return S; }, ION, note, save, writeHash, openPop, closePops, showTab,
+  select: id => select(id, false, "gallery"), pool: () => (gallery.visible.length ? gallery.visible : sorted()),
+  loaded: id => SIGHT.has(id), failed: id => SIGHT_FAIL.has(id), panels: () => spectra.geometry().panels,
+  data: (ion, ci) => (S.id && SIGHT.has(S.id) ? dataFor(ion, ci) : null), fit: fitResult, quality: compQuality, caseRS,
+  entry: id => CAT.get(id) || null, setIons,
+  getSnap: () => ({layout: S.layout, ions: S.ions.slice(), R: cloneState(S.R), sn: S.sn.slice(), vhw: S.vhw, vc: S.vc, fit: S.fit, intr: S.intr}),
+  applySnap(s) { Object.assign(S, {layout: s.layout, ions: s.ions.slice(), R: cloneState(s.R), sn: s.sn.slice(), vhw: s.vhw, vc: s.vc, intr: s.intr});
+    clampView(S, vmax()); syncAll(); setFit(s.fit); }});
+window.tngApp._debug.features = FEAT;
+
+/* ---------------- start ---------------- */
+initTips();
+(async function init() {
+  if (new URLSearchParams(location.search).has("debug")) document.body.classList.add("debug");   // shows the 3D LOD line (B_fix F8)
+  const H = parseHash(location.hash, reg, S); const hashId = H.id; Object.assign(S, H, {id: null, tab: "spectra"});
+  if (!reg.IONS.length) $("#statusline").textContent = "this page needs the exporter's configuration (scripts/export_tng50_web.py)";
+  setSide(store.get("tngsight.side") !== "0"); placeControls(); seedState(); setGeoEnabled(); pill(); banner(); syncAll();
+  /* B_fix R5, C2 code 6: before any sightline is decoded the boot clamp only bounds the hash (integer half-window from
+     10 up to the widest line window, the centre kept with it); select() clamps again with the decoded line's own vmax
+     once the sightline is in, so a deep-linked damped H I view (vw 6000 vc 2000) survives to the drawn page */
+  clampView(S, clamp((+S.vhw || 0) + Math.abs(+S.vc || 0), 1500, 2 * FIG_V_CAP)); inst.syncV();
+  aboutText(); galaxyUI(); GAL_READY.then(aboutText);
+  if (H.tab === "3d") showTab("3d");
+  const disc = discover();
+  const asked = unlistedGalaxy(GIX, location.hash, location.search);
+  if (asked != null) note(`subhalo ${asked} is not in this sample; showing subhalo ${GAL}`, "bad");   /* S2: never silently */
+  sourceUI();
+  const loadCat = async () => { const r = await fetch(CFG.catalog_url); if (!r.ok) throw new Error("HTTP " + r.status); const c = await r.json(); for (const e of c.entries || []) upsert(e, true); setSource(c); };
+  try { await loadCat(); staticOk = true; }
+  catch (x) {
+    if (!isDefGal()) { const g = GAL; GAL = GIX.default; applyPack(packFor(GIX, GAL, LEGACY), null); GAL_READY = Promise.resolve(); galaxyUI(); aboutText();   /* a listed pack that is not there: back to the default galaxy */
+      note(`subhalo ${g} could not be loaded (${x.message}); showing subhalo ${GAL}`, "bad");
+      try { await loadCat(); staticOk = true; } catch (y) { $("#galcount").textContent = `catalogue unavailable (${y.message})`; } }
+    else $("#galcount").textContent = `catalogue unavailable (${x.message})`; }
+  const cached = await IDB.all(); if (Array.isArray(cached)) for (const c of cached) if (c && c.entry && (!GIX || (c.galaxy ?? GIX.default) === GAL) && !CAT.has(c.entry.id)) upsert(c.entry, false);
+  catalogChanged();
+  if (hashId && !CAT.has(hashId)) pendingId = hashId;
+  const R0 = +CFG.galaxy?.R200c_kpc || +(GIX?.byId.get(GAL)?.R200c) || 0;
+  const first = (hashId && CAT.has(hashId)) ? hashId : isDefGal() && CAT.has(CFG.defaults.id) ? CFG.defaults.id
+    : defaultSightline([...CAT.values()], R0)?.id || (CAT.has(CFG.defaults.id) ? CFG.defaults.id : sorted()[0]?.id);
+  if (first) select(first, true, hashId === first ? "hash" : "init"); else draw();
+  emit("tng:ready", {version: 3});
+  await disc;
+  if (pendingId || !staticOk) await backendCatalog();
+  if (pendingId && CAT.has(pendingId)) select(pendingId, true, "hash");
+  else if (!S.id && CAT.size) select(sorted()[0].id, true, "init");
+})();

@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en" class="no-gl-scrim">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="../../favicon.ico" sizes="32x32">
+<link rel="icon" href="../../img/icon/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../img/icon/icon-180.png">
+<link rel="manifest" href="../../site.webmanifest">
+<title>How an absorption spectrum is made: follow the light through a TNG50 halo</title>
+<meta name="description" content="Follow a quasar's light along one sightline through the gas around a TNG50 galaxy and watch its spectrum form, cell by cell: shadows, speeds, blur, noise and a fit.">
+<link rel="canonical" href="https://galaxies.tanmaysingh.uk/learn/how-a-spectrum-is-made/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Tanmay Singh">
+<meta property="og:url" content="https://galaxies.tanmaysingh.uk/learn/how-a-spectrum-is-made/">
+<meta property="og:title" content="How an absorption spectrum is made">
+<meta property="og:description" content="Follow a quasar's light along one sightline through the gas around a TNG50 galaxy and watch its spectrum form, cell by cell.">
+<meta property="og:image" content="https://galaxies.tanmaysingh.uk/img/og/explainer.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A TNG50 galaxy's gas crossed by one sightline of quasar light">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="How an absorption spectrum is made">
+<meta name="twitter:description" content="Follow a quasar's light along one sightline through the gas around a TNG50 galaxy and watch its spectrum form, cell by cell.">
+<meta name="twitter:image" content="https://galaxies.tanmaysingh.uk/img/og/explainer.jpg">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#04050a">
+<link rel="preload" href="../../fonts/newsreader/newsreader-display-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../../fonts/newsreader/newsreader-display-latin-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../../fonts/space-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin>
+<!-- first-frame preloads (integrator; G6 first live frame): the module graph of js/main.js + the dock + equations, and the
+     documents and default story the first frame reads; one round trip instead of an import/fetch waterfall -->
+<link rel="modulepreload" href="js/main.js">
+<link rel="modulepreload" href="js/spectrum/dock.js">
+<link rel="modulepreload" href="js/stage/glcheck.js">
+<link rel="modulepreload" href="js/eq/equations.js">
+<link rel="modulepreload" href="js/core/clock.js">
+<link rel="modulepreload" href="js/core/input.js">
+<link rel="modulepreload" href="js/core/timeline.js">
+<link rel="modulepreload" href="js/core/seek.js">
+<link rel="modulepreload" href="js/core/shots.js">
+<link rel="modulepreload" href="js/core/bus.js">
+<link rel="modulepreload" href="js/core/prefetch.js">
+<link rel="modulepreload" href="js/drivers/play.js">
+<link rel="modulepreload" href="js/drivers/explore.js">
+<link rel="modulepreload" href="js/ui/hud.js">
+<link rel="modulepreload" href="js/ui/layoutclass.js">
+<link rel="modulepreload" href="js/ui/gate.js">
+<link rel="modulepreload" href="js/copy/derive.js">
+<link rel="modulepreload" href="js/engine.js">
+<link rel="modulepreload" href="js/plot.js">
+<link rel="modulepreload" href="js/spectrum/tausum.js">
+<link rel="modulepreload" href="js/spectrum/link.js">
+<link rel="modulepreload" href="js/spectrum/dials.js">
+<link rel="modulepreload" href="js/eq/bind.js">
+<link rel="modulepreload" href="js/scenes/sum.js">
+<link rel="modulepreload" href="js/scenes/dip.js">
+<link rel="modulepreload" href="js/scenes/saturation.js">
+<link rel="modulepreload" href="js/scenes/lsf.js">
+<link rel="modulepreload" href="js/scenes/noise.js">
+<link rel="modulepreload" href="../../js/fit.js">
+<link rel="modulepreload" href="js/scenes/fit.js">
+<link rel="modulepreload" href="js/scenes/yourturn.js">
+<link rel="modulepreload" href="js/core/timewarp.js">
+<link rel="modulepreload" href="js/store.js">
+<link rel="modulepreload" href="js/ui/layout.js">
+<link rel="modulepreload" href="js/ui/kinetic.js">
+<link rel="modulepreload" href="js/ui/rail.js">
+<link rel="modulepreload" href="js/ui/plaque.js">
+<link rel="modulepreload" href="js/ui/menu.js">
+<link rel="modulepreload" href="js/ui/narrative.js">
+<link rel="modulepreload" href="js/ui/picker.js">
+<link rel="modulepreload" href="../../js/vizdata.js">
+<link rel="modulepreload" href="../../js/colormaps.js">
+<link rel="modulepreload" href="../../js/state.js">
+<link rel="preload" href="copy.json" as="fetch" crossorigin="anonymous">
+<link rel="preload" href="data/index.json" as="fetch" crossorigin="anonymous">
+<link rel="preload" href="eq/eq.json" as="fetch" crossorigin="anonymous">
+<script>/* HERO_CHANGE_NOTE (fix1, review perf M1): the full tour's own files are preloaded only when no ?story= is asked for (a case story never reads them); a case story preloads its case copy instead */
+(function(){var s=new URLSearchParams(location.search).get("story"),f=s&&s!=="full"?["copy.cases.json"]:["beats.json","shots.json","data/story_488530_rand_b062_a062.json"],c=document.currentScript;
+f.forEach(function(h){var l=document.createElement("link");l.rel="preload";l.href=h;l.as="fetch";l.crossOrigin="anonymous";c.before(l);});})();</script>
+<!-- /first-frame preloads -->
+<link rel="stylesheet" href="css/story.css">
+<link rel="stylesheet" href="css/story2.css">
+<script>/* before first paint: the explorer's theme key for the sheets, ?still / ?embed / reduced motion as classes */
+(function(){var d=document.documentElement,q=new URLSearchParams(location.search);try{var t=localStorage.getItem("tngsight.theme");
+if(t==="light"||t==="dark")d.dataset.theme=t;if(localStorage.getItem("story.physics")==="1")d.classList.add("physics")}catch(e){}
+if(q.has("still"))d.classList.add("still");if(q.get("embed")==="1")d.classList.add("embed");
+if(matchMedia("(prefers-reduced-motion: reduce)").matches)d.classList.add("reduced");d.classList.add("js")})();</script>
+<script>/* three.js for the 3D stage: the explorer's pin with SRI (D8, three 0.169); ?three=<same-origin local copy> for offline nodes */
+(function(){var q=new URLSearchParams(location.search),pin="https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.min.js",t=q.get("three"),m={imports:{three:pin}};
+try{if(t&&new URL(t,location.href).origin===location.origin)m.imports.three=new URL(t,location.href).href;}catch(e){}
+if(m.imports.three===pin){m.integrity={};m.integrity[pin]="sha384-eCdgjbMm+jekI8fyaeCZ4Pnyg5k4Jn45w2qs3lfnAd5ES5IO4hKOXNisVBTyUzDO";}
+var s=document.createElement("script");s.type="importmap";s.textContent=JSON.stringify(m);document.currentScript.after(s);})();</script>
+</head>
+<body>
+<a class="skip" href="#text-overlay" id="skip-text">Read the story as text</a>
+<main id="stage" aria-roledescription="story" aria-describedby="stage-desc">
+  <p id="stage-desc" class="vh">An interactive flight along one sightline of quasar light through a simulated galaxy halo. Scroll, swipe or use the arrow
+    keys to move along the sightline; the story is also available as text from the menu.</p>
+  <canvas id="gl" role="img" aria-label="The gas around a simulated galaxy, with one sightline crossing it"></canvas>
+  <svg id="world" aria-hidden="true"></svg>
+  <div class="scrim-top" aria-hidden="true"></div>
+  <div class="scrim-bottom" aria-hidden="true"></div>
+  <div id="labels"></div>
+  <div id="kinetic" aria-hidden="true"></div>
+  <section id="dock" aria-label="Spectrum" data-noscrub></section>
+  <div id="hud">
+    <button id="act-chip" class="hud-pill" type="button" data-noscrub data-chrome="act" ><span class="vh">Chapter: </span><span class="act-l"></span></button>
+    <button id="phase-pill" class="hud-pill" type="button" data-noscrub data-chrome="phase" hidden></button>
+    <a id="back-btn" class="hud-btn" href="./" data-noscrub data-chrome="back" aria-label="Back to the start" title="Back to the start">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5"/></svg>
+    </a>
+    <button id="sound-btn" class="hud-pill snd msw" type="button" role="switch" aria-checked="false" data-noscrub data-chrome="sound">
+      <span class="msw-l">Music</span><span class="msw-t" aria-hidden="true"><span class="msw-bars"><i></i><i></i><i></i></span><span class="msw-k"><svg viewBox="0 0 20 20"><path d="M8 14.2V5.6l7-1.6v8.4"/><circle cx="6" cy="14.4" r="2.2"/><circle cx="13" cy="12.6" r="2.2"/></svg></span></span>
+    </button>
+    <button id="id-badge" class="hud-pill idb" type="button" data-noscrub data-chrome="badge" data-num data-testid="id-badge" hidden></button>
+    <button id="menu-btn" class="hud-btn" type="button" data-noscrub data-chrome="menu" aria-label="Menu">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6.5h12M4 10h12M4 13.5h12"/></svg>
+    </button>
+    <div id="hint" role="note" data-chrome="hint" hidden></div>
+  </div>
+  <nav id="rail" aria-label="Story position" data-noscrub></nav>
+  <div id="sheets">
+    <div id="menu-sheet" hidden></div>
+  </div>
+</main>
+<section id="text-overlay" aria-labelledby="text-h">
+  <div class="to-in">
+    <header><h2 id="text-h">How an absorption spectrum is made</h2><button type="button" class="hud-pill" data-close hidden>Back to the flight</button></header>
+    <ol id="narrative" data-narrative></ol>
+    <p class="to-cr">Music: Hans Zimmer, Day One (Interstellar, 2014), or Beethoven, Symphony No. 7 in A major, Op. 92, II. Allegretto (orchestral recording); excerpted, faded and looped.</p>
+  </div>
+</section>
+<div id="live" class="vh" aria-live="polite"></div>
+<noscript><div style="position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;font:400 18px/1.5 sans-serif;color:#f4f1ea;background:#04050a">
+  This story needs JavaScript. The explorer and its spectra are at <a href="../../index.html">the TNG50 sightline explorer</a>.</div></noscript>
+<script type="module">
+/* ?sizetable=1: the browser size table for node G1 (U_qa's story_overlap --capture-sizes, story_layout): at this viewport,
+   every text slot resolved against the story keys and flags (model box vs real DOM box) and every equation through U_eq's
+   real overlay over 160 seek frames. Exposes a minimal window.__story {state, beats, sizeTable} so the harness detects it. */
+const q = new URLSearchParams(location.search);
+if (q.has("sizetable")) {
+  const [HUD, SK, EQM] = await Promise.all([import("./js/ui/hud.js"), import("./js/core/seek.js"), import("./js/eq/equations.js")]);
+  const J = u => fetch(u).then(r => { if (!r.ok) throw new Error(u + ": HTTP " + r.status); return r.json(); });
+  const [copy, beatsDoc, shots, idx, eq] = await Promise.all([J("copy.json"), J("beats.json"), J("shots.json"), J("data/index.json"), EQM.loadEq()]);
+  const st = idx.stories.find(s => s.galaxy === idx.default.galaxy && s.ray === idx.default.ray) || idx.stories[0];
+  const data = await J("data/" + st.story);
+  const beats = Array.isArray(beatsDoc) ? beatsDoc : beatsDoc.beats;
+  const seek = SK.makeSeek({beats: beatsDoc, shots});
+  const layer = document.getElementById("labels");
+  const overlay = EQM.createOverlay({eq, data, root: layer});
+  /* copy.derive keys through the ROOT module (U_copy's derive.js, placed by the integrator), as the page resolves them */
+  const {copyLookup} = await import("./js/copy/derive.js");
+  const lookup = copyLookup(copy, data); Object.assign(lookup.keys, window.__derivedKeys || {});
+  window.__story = {version: "sizetable", beats: () => beats, state: () => ({p: 0, beat: {id: beats[0].id, stop: null}, quality: "stills", spec: {dock: "strip"}}),
+    sizeTable: () => HUD.captureStorySizes({copy, lookup, flags: data.flags || {}, layer: document.getElementById("kinetic"), beats,
+                                            seek: (p, ov) => seek(p, data, ov), overlay, eq})};
+} else {
+  import("./js/main.js").catch(err => {
+    /* the integrator's entry (js/main.js) is missing or failed: say so, keep the text path */
+    console.error(err);
+    const d = document.getElementById("stage-desc");
+    d.classList.remove("vh");
+    Object.assign(d.style, {position: "absolute", inset: "auto 24px 24px", maxWidth: "40em", color: "#b9b6c8", font: "400 15px/1.5 var(--sans)"});
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,426 @@
+Third-party notices
+===================
+
+The code in this repository (absreq/, scripts/, tngsight/, server/, deploy/, tng50/, docs/ page
+code) is MIT-licensed; see LICENSE. The components below are not ours and keep their own terms.
+
+1. Trident (BSD 3-Clause), https://github.com/trident-project/trident
+   - absreq/data/trident_lines.txt is Trident's line list, redistributed unmodified.
+   - deploy/hf_space/trident_doppler_only.patch is a diff against Trident (base commit 3f69ad7e);
+     it is a derivative of Trident source and is distributed under Trident's BSD 3-Clause
+     licence below, not under MIT.
+   - Trident is installed as a dependency (not vendored) by the Space image and the local env.
+
+2. yt (BSD 3-Clause), https://github.com/yt-project/yt
+   - Used as a dependency only (not vendored). Licence reproduced below.
+
+3. IllustrisTNG / TNG50-1 simulation data (z = 0, snapshot 99), https://www.tng-project.org/data/
+   (free, registration required)
+   - The TNG50-derived products (docs/tng50/data/*.bin and catalog.json, the npz library, the
+     Learn page's story data, chapter images and film under docs/tng50/learn/*/data, img and
+     media (see 10), the private Hugging Face dataset with the slim cutout, and the PUBLIC Hugging
+     Face datasets tanmay-starslab/tng50-mwm31-web-0 to tng50-mwm31-web-3 (the 198-galaxy sample)
+     and tanmay-starslab/tng50-sub488530-viz (3D gas and stellar cubes; manifest_v2.json also
+     committed as docs/tng50/data/viz/manifest_v2.json)) are derived from IllustrisTNG data.
+     They are used as the TNG Collaboration requests (citation,
+     https://www.tng-project.org/data/docs/background/#citation) and are not relicensed here (not
+     MIT). Please cite:
+       Nelson et al. 2019a, Computational Astrophysics and Cosmology 6, 2, "The IllustrisTNG
+         simulations: public data release" (arXiv:1812.05609)
+       Nelson et al. 2019b, MNRAS 490, 3234 (TNG50: outflows; arXiv:1902.05554)
+       Pillepich et al. 2019, MNRAS 490, 3196 (TNG50: discs; arXiv:1902.05553)
+     Acknowledgement: The IllustrisTNG simulations were undertaken with compute time awarded by
+     the Gauss Centre for Supercomputing (GCS) under GCS Large-Scale Projects GCS-ILLU and
+     GCS-DWAR on the GCS share of the supercomputer Hazel Hen at the High Performance Computing
+     Center Stuttgart (HLRS), as well as on the machines of the Max Planck Computing and Data
+     Facility (MPCDF) in Garching, Germany.
+   - Spectra of the 198 Milky Way and M31 analogues: the SBI_CGM fiducial ray library, with rays
+     through the TNG50 Voronoi mesh traced with THOR (Byrohl & Nelson 2025, "THOR: a
+     GPU-accelerated and MPI-parallel radiative transfer code", arXiv:2507.11603), ion fractions
+     from CLOUDY (Ferland et al. 2017, RMxAA 53, 385) with the FG11 UV background
+     (Faucher-Giguère et al. 2009, ApJ 703, 1416) and Rahmati et al. (2013, MNRAS 430, 2427)
+     H I self-shielding.
+   - Galaxy 488530's default and custom rays: Trident (Hummels, Smith & Silvia 2017, ApJ 847, 59)
+     on yt (Turk et al. 2011, ApJS 192, 9) with the HM2012 UV background (Haardt & Madau 2012,
+     ApJ 746, 125); please cite both as well. The ion fractions in every 3D cube use the same
+     Trident HM2012 table. The stellar cubes use GFM_StellarPhotometrics (Bruzual & Charlot 2003
+     models, as documented by TNG).
+
+3b. FIRE-2 cosmological zoom-in simulation data (z = 0, snapshot 600),
+    http://flathub.flatironinstitute.org/fire and https://fire.northwestern.edu/data/
+   - The FIRE-2-derived products in the PUBLIC Hugging Face datasets
+     tanmay-starslab/fire2-core-web-0 to tanmay-starslab/fire2-core-web-3 (23 halos: Latte Milky
+     Way-mass halos m12b, m12c, m12f, m12i, m12m, m12r, m12w, m12z; ELVIS on FIRE Local Group pairs
+     Romeo, Juliet, Romulus, Remus, Thelma, Louise; Core dwarf halos m11b, m11d, m11e, m11h, m11i,
+     m11q, m10q, m10v, m09; 120 Trident HM2012 sightlines, Voigt component catalogues, and 5-level
+     L0..L4 gas and S0..S4 3D-dust stellar cubes per halo) are derived from the FIRE-2 public data
+     release and are not relicensed here (not MIT). They are used under the FIRE Collaboration's
+     citation terms (https://fire.northwestern.edu/data/); please cite:
+       Wetzel et al. 2023, ApJS 265, 44, "Public Data Release of the FIRE-2 Cosmological Zoom-in
+         Simulations of Galaxy Formation" (arXiv:2202.06969)
+       Hopkins et al. 2018, MNRAS 480, 800 (FIRE-2 physics; arXiv:1702.06148)
+       Hopkins 2015, MNRAS 450, 53 (GIZMO code; arXiv:1409.7395)
+       Wetzel et al. 2016, ApJL 827, L23; Garrison-Kimmel et al. 2017, MNRAS 471, 1709;
+         Samuel et al. 2020, MNRAS 491, 1471 (Latte suite)
+       Garrison-Kimmel et al. 2019, MNRAS 487, 1380 (ELVIS on FIRE Local Group suite)
+       Chan et al. 2018, MNRAS 478, 906; El-Badry et al. 2018, MNRAS 473, 1930 (Core dwarf suite)
+     Acknowledgement: We thank the FIRE Collaboration and the Flatiron Institute for making the
+     FIRE-2 simulation snapshots publicly available.
+
+
+4. three.js 0.169.0 (MIT), https://github.com/mrdoob/three.js
+   - Loaded by docs/tng50 from cdn.jsdelivr.net when the 3D tab is opened; not vendored.
+     docs/tng50/js/colormaps.js holds 33 sampled stops of each colour map, and
+     docs/tng50/data/luts/luts.json (made by make_luts.py) holds 256 entries of each:
+       - viridis, magma and inferno from matplotlib 3.9 (CC0, Stéfan van der Walt & Nathaniel
+         Smith);
+       - cividis (Nuñez, Anderton & Renslow 2018, PLoS ONE 13, e0199239), as shipped in
+         matplotlib 3.9.4 under the matplotlib licence (PSF-style), reproduced verbatim below.
+         Copyright (c) 2012- Matplotlib Development Team; All Rights Reserved. Summary of changes
+         (licence clause 3): the colour table was resampled to 256 entries (luts.json, also in the
+         public Hugging Face dataset as luts/luts.json) and to 33 stops (colormaps.js); nothing
+         else of matplotlib is included;
+       - tng_dusk and tng_ice: our own maps (MIT), defined by OKLCh control points in the OKLab
+         colour space of Björn Ottosson (2020, "A perceptual color space for image processing",
+         https://bottosson.github.io/posts/oklab/). Only the published matrices are used, and no
+         code is copied;
+       - grey: linear.
+     No colour map from Scott Lucchini's viewer is used.
+
+5. WebLLM 0.2.85 (Apache-2.0), https://github.com/mlc-ai/web-llm, and the model weights
+   Qwen2.5-1.5B-Instruct-q4f16_1-MLC (Apache-2.0, Qwen team / MLC)
+   - Downloaded by the visitor's browser only when they click "Load local model"; not vendored.
+
+6. pygad (GPL-2.0-or-later) is NOT part of this repository. It was only executed, out of tree, to
+   compare against tngsight/vpfit.py, which is an independent clean-room implementation (MIT).
+
+7. Star colour composite: the asinh stretch of Lupton et al. 2004 (PASP 116, 133), "Preparing
+   red-green-blue images from CCD data". tngsight/vizpack.py (lupton_rgb) and the viewer shader
+   implement the published formula independently. No code from any implementation of it (for
+   example astropy's make_lupton_rgb) is copied.
+
+8. Scott Lucchini's TNG 3D viewer (its public viz3d.js, which states no licence) inspired the
+   technique only: deposited 256³ uint8 cubes, a column-integral default render, and z-slice
+   atlases. Its code was read for the method and is NOT copied. tngsight/deposit.py, vizpack.py
+   and docs/tng50/js/{viewer3d,raymarch,vizdata}.js are independent implementations (MIT). None
+   of its LUTs, metadata or data files are used.
+
+9. temet 0.9.2 (MIT, Dylan Nelson), https://temet.tng-project.org/, was run offline, out of tree,
+   only to make a 2D reference stellar composite (temet.util.sphMap) against which the star
+   cubes' fluxes and colours were validated. No temet code is in this repository or in the
+   Hugging Face dataset.
+
+10. Learn page "How a spectrum is made" (docs/tng50/learn/how-a-spectrum-is-made/)
+   - Page, engine, scenes and build scripts are our own code (MIT). The page imports the
+     explorer's own modules (docs/tng50/js/fit.js, state.js); no third-party JavaScript is loaded.
+   - Fonts, SIL Open Font License 1.1 (text in docs/tng50/fonts/OFL.txt), vendored unmodified as
+     Google Fonts woff2 subsets in docs/tng50/fonts/ (shared with the explorer and Detect & Resolve;
+     Newsreader, with its own OFL.txt, in docs/tng50/fonts/newsreader/):
+       Space Grotesk, Copyright 2020 The Space Grotesk Project Authors
+       (https://github.com/floriankarsten/space-grotesk);
+       JetBrains Mono, Copyright 2020 The JetBrains Mono Project Authors
+       (https://github.com/JetBrains/JetBrainsMono).
+   - Equations (eq/*.svg) are made at build time with LaTeX (amsmath, amssymb) and dvisvgm
+     (--no-fonts, so glyphs are outlines of the Computer Modern / AMSFonts Type 1 fonts, SIL OFL
+     1.1); neither tool is shipped.
+   - The film is rendered with HyperFrames 0.9.36 (Apache-2.0,
+     https://github.com/heygen-com/hyperframes) driving chrome-headless-shell, and muxed with
+     ffmpeg. These are build tools only: no HyperFrames, Chrome or ffmpeg code is in this
+     repository or on the page, and render.html only registers a frame source with the runtime
+     that the HyperFrames CLI injects. The film MP4s are not committed (media/.gitignore).
+     Versions are recorded in media/manifest.json.
+   - Not used: GSAP (its Standard "No Charge" licence is not an open-source licence), Remotion
+     (not free for universities), three.js inside the story, Lenis, Scrollama.
+   - Music (optional, off by default, two tracks chosen in the menu; see media/MUSIC_LICENSE.txt):
+     media/music_dayone.m4a (the default), Hans Zimmer, Day One (Interstellar, 2014), a commercial
+     soundtrack recording supplied by the site owner; excerpted, looped and loudness-levelled.
+     media/music_loop.m4a and the films' soundtrack: Beethoven, Symphony No. 7 in A major, Op. 92,
+     II. Allegretto (the work is public domain), an orchestral recording supplied by the site owner;
+     excerpted, faded, looped and loudness-levelled. Neither recording is covered by this
+     repository's MIT licence.
+   - The story data, chapter images and film show TNG50 data and fall under item 3.
+
+11. HST/COS line-spread-function tables (STScI), absreq/data/cos_lsf/
+   - Optical-model LSF tables from
+     https://www.stsci.edu/hst/instrumentation/cos/performance/spectral-resolution (retrieved
+     2026-11-19), stored gzipped and otherwise unmodified; dispersion coefficients copied from the
+     CRDS DISPTAB references 97h1820cl_disp.fits and 63p1559jl_disp.fits into absreq/lsf.py.
+   - Terms: STScI Content Use Policy (https://www.stsci.edu/copyright): material produced by STScI
+     for NASA (contracts NAS5-03127, NAS5-26555, 80GSFC19C0054) carries no copyright claim and may
+     be used freely as public domain; NASA and STScI ask to be acknowledged. Not covered by this
+     repository's MIT licence.
+
+12. uisfx 0.4.0 (code MIT, audio CC0 1.0), https://uisfx.com, https://github.com/romainsimon/uisfx
+   - docs/tng50/vendor/uisfx/uisfx.js is the package's dist/index.js, unmodified apart from the removed
+     source-map comment; LICENSE (MIT, Copyright (c) 2026 Yuki Capital) and LICENSE-AUDIO (CC0) sit
+     beside it. The runtime synthesises the optional UI sound effects in the browser; no audio files
+     are shipped. Loaded only once a visitor turns Sounds on.
+
+13. MediaPipe Tasks Vision 1.2.3, the Face Landmarker and Gesture Recognizer models (Apache-2.0, Google LLC),
+    https://github.com/google-ai-edge/mediapipe, npm @mediapipe/tasks-vision
+   - docs/tng50/vendor/mediapipe/: vision_bundle.js (modified: the usage logger never sends and its
+     URL and the source-map comment are removed), wasm/vision_wasm_internal.js and .wasm
+     (unmodified), face_landmarker.task and gesture_recognizer.task (the float16 models, unmodified;
+     gesture_recognizer.task sha256 97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482,
+     from storage.googleapis.com/mediapipe-models/gesture_recognizer); LICENSE is the Apache-2.0 text
+     and README.md gives the versions, source URLs, sha256 values and the changes. Loaded only once a
+     visitor starts head or hand control in the 3D tab; it runs on their device.
+
+------------------------------------------------------------------------------------------------
+Trident licence (verbatim from trident 1.4.2)
+------------------------------------------------------------------------------------------------
+
+====================================
+ The Trident project licensing terms
+====================================
+
+Trident is licensed under the terms of the Modified BSD License (also
+known as New or Revised BSD), as follows:
+
+Copyright (c) 2015-, Trident Development Team
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+Redistributions in binary form must reproduce the above copyright notice, this
+list of conditions and the following disclaimer in the documentation and/or
+other materials provided with the distribution.
+
+Neither the name of the Trident Development Team nor the names of its
+contributors may be used to endorse or promote products derived from this
+software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+About the Trident Development Team
+----------------------------------
+
+The Trident Development Team originally consisted of Cameron Hummels,
+Devin Silvia, and Britton Smith.  The ion_balance module was
+originally written by Britton Smith in 2008 and licensed under the
+GPLv3, but is now available under the BSD 3-clause license as a
+component of Trident.
+
+The core team that coordinates development on BitBucket can be found
+here:
+https://bitbucket.org/trident-project/
+
+Our Copyright Policy
+--------------------
+
+Trident uses a shared copyright model. Each contributor maintains copyright
+over their contributions to Trident. But, it is important to note that these
+contributions are typically only changes to the repositories. Thus, the Trident
+source code, in its entirety is not the copyright of any single person or
+institution.  Instead, it is the collective copyright of the entire Trident
+Development Team.  If individual contributors want to maintain a record of what
+changes/contributions they have specific copyright on, they should indicate
+their copyright in the commit message of the change, when they commit the
+change to one of the Trident repositories.
+
+With this in mind, the following banner should be used in any source code file
+to indicate the copyright and license terms:
+
+#-----------------------------------------------------------------------------
+# Copyright (c) 2017, Trident Development Team.
+#
+# Distributed under the terms of the Modified BSD License.
+#
+# The full license is in the file LICENSE, distributed with this software.
+#-----------------------------------------------------------------------------
+
+Thanks to the yt Project for inspiring this document.
+
+
+------------------------------------------------------------------------------------------------
+yt licence (verbatim from yt 4.4.1)
+------------------------------------------------------------------------------------------------
+
+===============================
+ The yt project licensing terms
+===============================
+
+yt is licensed under the terms of the Modified BSD License (also known as New
+or Revised BSD), as follows:
+
+Copyright (c) 2013-, yt Development Team
+Copyright (c) 2006-2013, Matthew Turk <matthewturk@gmail.com>
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+Redistributions in binary form must reproduce the above copyright notice, this
+list of conditions and the following disclaimer in the documentation and/or
+other materials provided with the distribution.
+
+Neither the name of the yt Development Team nor the names of its
+contributors may be used to endorse or promote products derived from this
+software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+About the yt Development Team
+-----------------------------
+
+Matthew Turk began yt in 2006 and remains the project lead.  Over time yt has
+grown to include contributions from a large number of individuals from many
+diverse institutions, scientific, and technical backgrounds.
+
+Until the fall of 2013, yt was licensed under the GPLv3.  However, with consent
+from all developers and on a public mailing list, yt has been relicensed under
+the BSD 3-clause under a shared copyright model.  For more information, see:
+https://mail.python.org/archives/list/yt-dev@python.org/thread/G4DJDDGB4PSZFJVPWRSHNOSUMTISXC4X/
+All versions of yt prior to this licensing change are available under the
+GPLv3; all subsequent versions are available under the BSD 3-clause license.
+
+The yt Development Team is the set of all contributors to the yt project.  This
+includes all of the yt subprojects.
+
+The core team that coordinates development on BitBucket can be found here:
+http://bitbucket.org/yt_analysis/
+
+
+Our Copyright Policy
+--------------------
+
+yt uses a shared copyright model. Each contributor maintains copyright
+over their contributions to yt. But, it is important to note that these
+contributions are typically only changes to the repositories. Thus, the yt
+source code, in its entirety is not the copyright of any single person or
+institution.  Instead, it is the collective copyright of the entire yt
+Development Team.  If individual contributors want to maintain a record of what
+changes/contributions they have specific copyright on, they should indicate
+their copyright in the commit message of the change, when they commit the
+change to one of the yt repositories.
+
+------------------------------------------------------------------------------------------------
+matplotlib licence (verbatim from matplotlib 3.9.4, LICENSE/LICENSE)
+------------------------------------------------------------------------------------------------
+
+License agreement for matplotlib versions 1.3.0 and later
+=========================================================
+
+1. This LICENSE AGREEMENT is between the Matplotlib Development Team
+("MDT"), and the Individual or Organization ("Licensee") accessing and
+otherwise using matplotlib software in source or binary form and its
+associated documentation.
+
+2. Subject to the terms and conditions of this License Agreement, MDT
+hereby grants Licensee a nonexclusive, royalty-free, world-wide license
+to reproduce, analyze, test, perform and/or display publicly, prepare
+derivative works, distribute, and otherwise use matplotlib
+alone or in any derivative version, provided, however, that MDT's
+License Agreement and MDT's notice of copyright, i.e., "Copyright (c)
+2012- Matplotlib Development Team; All Rights Reserved" are retained in
+matplotlib  alone or in any derivative version prepared by
+Licensee.
+
+3. In the event Licensee prepares a derivative work that is based on or
+incorporates matplotlib or any part thereof, and wants to
+make the derivative work available to others as provided herein, then
+Licensee hereby agrees to include in any such work a brief summary of
+the changes made to matplotlib .
+
+4. MDT is making matplotlib available to Licensee on an "AS
+IS" basis.  MDT MAKES NO REPRESENTATIONS OR WARRANTIES, EXPRESS OR
+IMPLIED.  BY WAY OF EXAMPLE, BUT NOT LIMITATION, MDT MAKES NO AND
+DISCLAIMS ANY REPRESENTATION OR WARRANTY OF MERCHANTABILITY OR FITNESS
+FOR ANY PARTICULAR PURPOSE OR THAT THE USE OF MATPLOTLIB
+WILL NOT INFRINGE ANY THIRD PARTY RIGHTS.
+
+5. MDT SHALL NOT BE LIABLE TO LICENSEE OR ANY OTHER USERS OF MATPLOTLIB
+ FOR ANY INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES OR
+LOSS AS A RESULT OF MODIFYING, DISTRIBUTING, OR OTHERWISE USING
+MATPLOTLIB , OR ANY DERIVATIVE THEREOF, EVEN IF ADVISED OF
+THE POSSIBILITY THEREOF.
+
+6. This License Agreement will automatically terminate upon a material
+breach of its terms and conditions.
+
+7. Nothing in this License Agreement shall be deemed to create any
+relationship of agency, partnership, or joint venture between MDT and
+Licensee.  This License Agreement does not grant permission to use MDT
+trademarks or trade name in a trademark sense to endorse or promote
+products or services of Licensee, or any third party.
+
+8. By copying, installing or otherwise using matplotlib ,
+Licensee agrees to be bound by the terms and conditions of this License
+Agreement.
+
+License agreement for matplotlib versions prior to 1.3.0
+========================================================
+
+1. This LICENSE AGREEMENT is between John D. Hunter ("JDH"), and the
+Individual or Organization ("Licensee") accessing and otherwise using
+matplotlib software in source or binary form and its associated
+documentation.
+
+2. Subject to the terms and conditions of this License Agreement, JDH
+hereby grants Licensee a nonexclusive, royalty-free, world-wide license
+to reproduce, analyze, test, perform and/or display publicly, prepare
+derivative works, distribute, and otherwise use matplotlib
+alone or in any derivative version, provided, however, that JDH's
+License Agreement and JDH's notice of copyright, i.e., "Copyright (c)
+2002-2011 John D. Hunter; All Rights Reserved" are retained in
+matplotlib  alone or in any derivative version prepared by
+Licensee.
+
+3. In the event Licensee prepares a derivative work that is based on or
+incorporates matplotlib  or any part thereof, and wants to
+make the derivative work available to others as provided herein, then
+Licensee hereby agrees to include in any such work a brief summary of
+the changes made to matplotlib.
+
+4. JDH is making matplotlib  available to Licensee on an "AS
+IS" basis.  JDH MAKES NO REPRESENTATIONS OR WARRANTIES, EXPRESS OR
+IMPLIED.  BY WAY OF EXAMPLE, BUT NOT LIMITATION, JDH MAKES NO AND
+DISCLAIMS ANY REPRESENTATION OR WARRANTY OF MERCHANTABILITY OR FITNESS
+FOR ANY PARTICULAR PURPOSE OR THAT THE USE OF MATPLOTLIB
+WILL NOT INFRINGE ANY THIRD PARTY RIGHTS.
+
+5. JDH SHALL NOT BE LIABLE TO LICENSEE OR ANY OTHER USERS OF MATPLOTLIB
+ FOR ANY INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES OR
+LOSS AS A RESULT OF MODIFYING, DISTRIBUTING, OR OTHERWISE USING
+MATPLOTLIB , OR ANY DERIVATIVE THEREOF, EVEN IF ADVISED OF
+THE POSSIBILITY THEREOF.
+
+6. This License Agreement will automatically terminate upon a material
+breach of its terms and conditions.
+
+7. Nothing in this License Agreement shall be deemed to create any
+relationship of agency, partnership, or joint venture between JDH and
+Licensee.  This License Agreement does not grant permission to use JDH
+trademarks or trade name in a trademark sense to endorse or promote
+products or services of Licensee, or any third party.
+
+8. By copying, installing or otherwise using matplotlib,
+Licensee agrees to be bound by the terms and conditions of this License
+Agreement.

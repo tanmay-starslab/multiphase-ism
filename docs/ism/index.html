@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="icon" href="img/icon/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="img/icon/icon-180.png">
+<link rel="manifest" href="site.webmanifest">
+<title>Seeing the Interstellar Medium &amp; Multiphase Mixing Layers: 3D WebGL2 &amp; 12-ion Voigt absorption explorer</title>
+<meta name="description" content="Interactive 3D WebGL2 radiative-transfer volume explorer and 12-ion UV/EUV/X-ray Voigt absorption spectrum laboratory for the multiphase interstellar medium and radiative turbulent mixing layers from 2500 AU to 1 kpc.">
+<link rel="canonical" href="https://ism.tanmaysingh.uk/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Tanmay Singh">
+<meta property="og:url" content="https://ism.tanmaysingh.uk/">
+<meta property="og:title" content="Seeing the Interstellar Medium &amp; Multiphase Mixing Layers">
+<meta property="og:description" content="Sub-parsec to kiloparsec 3D WebGL2 radiative-transfer volume explorer and 12-ion UV/EUV/X-ray Voigt absorption laboratory with Bring-Your-Own-Simulation CLI.">
+<meta property="og:image" content="https://ism.tanmaysingh.uk/img/og/explorer.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A 3D radiative turbulent mixing layer and multiphase ISM volume crossed by absorption sightlines">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Seeing the Interstellar Medium &amp; Multiphase Mixing Layers">
+<meta name="twitter:description" content="Sub-parsec to kiloparsec 3D WebGL2 radiative-transfer volume explorer and 12-ion UV/EUV/X-ray Voigt absorption laboratory.">
+<meta name="twitter:image" content="https://ism.tanmaysingh.uk/img/og/explorer.jpg">
+<link rel="preload" href="fonts/space-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/page.css">
+<style>/* Entry to "How an absorption spectrum is made" (explainer v2, U_entry): a beam-coloured call to action in the spectra panel header,
+   on the row under Lines, with a dismissible hint beside it, just above the first spectrum (the Lines row has about
+   130 px free at 1440 px with the default five lines, too little for the pill). First visit (review2 beauty M4): from 640 px
+   up it is inline, so it cannot cover the spectra: the row gains a small still of this galaxy and the pill glows twice.
+   Only phones get a card (a bottom sheet, a .pop, so it follows the explorer's popover rules). The pill is the story's own
+   dark sky with its warm beam colour in both themes. */
+#gh-link{box-sizing:border-box}
+:root{--story-sky:#0b0f1c;--story-beam:#fff4df;--story-glow:rgba(255,226,180,.55);--story-edge:rgba(255,232,196,.42)}
+.story-cta{display:inline-flex;align-items:center;gap:9px;height:36px;padding:0 18px 0 13px;border-radius:18px;white-space:nowrap;text-decoration:none;
+  font:500 13.5px/1 var(--sans);color:var(--story-beam);border:1px solid rgba(255,214,160,.55);
+  background:radial-gradient(120% 160% at 12% 50%,rgba(255,196,120,.30),transparent 60%),linear-gradient(135deg,#1c1530,var(--story-sky) 60%);
+  box-shadow:0 0 0 1px rgba(255,226,180,.10),0 0 22px -4px var(--story-glow),0 6px 16px -8px rgba(0,0,0,.6);
+  position:relative;overflow:hidden;vertical-align:middle;transition:box-shadow .25s,border-color .25s,transform .25s;
+  animation:story-breathe 3.6s ease-in-out infinite}
+.story-cta .sc-beam{flex:none;width:20px;height:11px;color:#ffd79e;filter:drop-shadow(0 0 4px rgba(255,210,150,.9))}
+.story-cta .sc-beam circle{transform-origin:14.6px 5px;animation:story-star 3.6s ease-in-out infinite}
+.story-cta .sc-q{color:rgba(255,244,223,.88);font-weight:500}
+.story-cta .sc-go{font-weight:600;background:linear-gradient(90deg,#fff1d6,#ffbe72);-webkit-background-clip:text;background-clip:text;color:transparent}
+.story-cta .sc-go span{display:inline-block;padding-right:2px;background:inherit;-webkit-background-clip:text;background-clip:text;transition:transform .25s}
+.story-cta:hover,.story-cta:focus-visible{transform:translateY(-1px);border-color:#ffe3b8;
+  box-shadow:0 0 0 3px rgba(255,226,180,.22),0 0 30px 0 var(--story-glow),0 10px 22px -10px rgba(0,0,0,.7)}
+.story-cta:hover .sc-go span,.story-cta:focus-visible .sc-go span{transform:translateX(3px)}
+.story-cta:active{transform:translateY(0) scale(.98)}
+.story-cta:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.story-cta::after{content:"";position:absolute;inset:0 auto 0 -40%;width:30%;pointer-events:none;
+  background:linear-gradient(100deg,transparent,rgba(255,236,205,.35),transparent);animation:story-shimmer 4.5s ease-in-out 1.5s infinite}
+@keyframes story-shimmer{0%,75%{transform:translateX(0)}100%{transform:translateX(560%)}}
+@keyframes story-breathe{0%,100%{box-shadow:0 0 0 1px rgba(255,226,180,.10),0 0 18px -6px var(--story-glow),0 6px 16px -8px rgba(0,0,0,.6)}
+  50%{box-shadow:0 0 0 1px rgba(255,226,180,.18),0 0 28px -2px var(--story-glow),0 6px 16px -8px rgba(0,0,0,.6)}}
+@keyframes story-star{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
+@media (prefers-reduced-motion:reduce){.story-cta,.story-cta .sc-beam circle,.story-cta::after{animation:none}.story-cta::after{display:none}
+  .story-cta,.story-cta .sc-go span{transition:none}}
+#story-row{display:flex;align-items:center;gap:12px;margin:0 4px 6px 20px;min-height:34px;font:400 12.5px/1.4 var(--sans);color:var(--muted)}
+#story-row .sh-t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#story-row .sh-t b{color:var(--ink);font-weight:500}
+#story-row [hidden]{display:none}
+#story-row .sh-x{flex:none;margin-left:auto;width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:8px;background:none;color:var(--muted);cursor:pointer}
+#story-row .sh-x:hover,#story-row .sh-x:focus-visible{background:rgba(127,127,160,.14);color:var(--ink)}
+#story-row .sh-x svg{width:12px;height:12px}
+#story-row .sh-art{flex:none;width:54px;height:30px;border-radius:7px;object-fit:cover;background:var(--story-sky);
+  border:1px solid var(--story-edge);opacity:0;transition:opacity .6s ease}
+#story-row .sh-art.on{opacity:1}
+#story-row.intro .story-cta{animation:story-glow 1.6s ease-in-out .2s 2}
+@keyframes story-glow{0%,100%{box-shadow:0 0 0 0 rgba(255,226,180,0)}50%{box-shadow:0 0 0 4px rgba(255,226,180,.22),0 0 22px 0 var(--story-glow)}}
+@media (prefers-reduced-motion:reduce){#story-row.intro .story-cta{animation:none}#story-row .sh-art{transition:none}}
+@media (max-width:820px){#story-row .sh-art{display:none}}
+#pop-story{width:272px;padding:0;overflow:hidden}   /* phones only (a bottom sheet below 640 px); wider screens use the inline intro */
+#pop-story .ps-art{display:block;width:100%;aspect-ratio:3/1;object-fit:cover;background:var(--story-sky)}
+#pop-story .ps-b{padding:12px 14px 14px}
+#pop-story.sheet .ps-art{aspect-ratio:21/9}
+#pop-story h3{font:600 14px/1.3 var(--sans);margin:0 0 6px;color:var(--ink)}
+#pop-story p{margin:0 0 12px}
+#pop-story .ps-row{display:flex;gap:8px;align-items:center}
+#pop-story .ps-row .story-cta{flex:1;justify-content:center;height:40px;border-radius:20px}
+#pop-story .ps-row .pbtn{height:36px}
+.pop p.story-in{margin:12px 0 0}
+.pop .story-in a{color:var(--ink);text-underline-offset:3px}
+/* phones: the plot bar's groups live in the drawer; the story row keeps the CTA alone (no hint text) */
+@media (max-width:820px){#story-row{margin:2px 4px 6px 16px}}
+@media (max-width:600px){#story-row .sh-t,#story-row .sh-x{display:none}}
+@media (max-width:1180px){#story-row .sh-t b{display:none}}
+@media (max-width:360px){.story-cta .sc-q{display:none}}
+@media (pointer:coarse){#story-row .sh-x{width:44px;height:44px}}
+/* phones: the floating Ask button covers the right end of the status bar (the fit status ran under it at 390 px) */
+body:has(>#chat-open.fab:not([hidden])) #bar{padding-right:104px}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"},"integrity":{"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.min.js":"sha384-eCdgjbMm+jekI8fyaeCZ4Pnyg5k4Jn45w2qs3lfnAd5ES5IO4hKOXNisVBTyUzDO","https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/controls/OrbitControls.js":"sha384-aJoe4qqS/DgF2jh9njAuvA6QIveJYoCuYOfYjdFY8P3eawzmc9bEQ40jq2TvOyuP"}}</script>
+<script id="tier-gate">/* device tier (perf R5): html[data-tier] = low | mid | high from cheap signals before first paint; js/tier.js adds
+   the WebGL probe (gl) once per session after first paint. ?tier= overrides; ?gpu= and ?bg= keep their own meaning.
+   decide() is pure (tests/js/tier_unit.mjs). An unknown GPU (no probe yet) is mid, never low. */
+(function (w) {
+  var K = "tng50.tier", WEAK = /mali|adreno|powervr|videocore|tegra|apple gpu|intel.*\b(hd|uhd) graphics/i;
+  function decide(s) {
+    if (s.lost || s.saveData || /2g|3g/.test(s.net || "") || (s.mem > 0 && s.mem <= 2) || (s.cores > 0 && s.cores <= 2) || (s.gl && s.gl.stills)) return "low";
+    if (s.mobile || !s.gl || (s.mem > 0 && s.mem <= 4) || (s.cores > 0 && s.cores <= 4) || WEAK.test(s.gl.renderer || "")) return "mid";
+    return "high";
+  }
+  function ss(k, v) { try { return v === undefined ? w.sessionStorage.getItem(k) : w.sessionStorage.setItem(k, v); } catch (e) { return null; } }
+  function signals(gl) { var n = w.navigator || {}, c = n.connection || {}, ua = n.userAgent || "", mm = function (q) { return !!(w.matchMedia && w.matchMedia(q).matches); };
+    return {mem: n.deviceMemory, cores: n.hardwareConcurrency, saveData: !!c.saveData, net: c.effectiveType || "", lost: ss("tng50.gpuLite") === "1", gl: gl,
+      mobile: !!(n.userAgentData && n.userAgentData.mobile) || /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle/i.test(ua) || (/Macintosh/.test(ua) && n.maxTouchPoints > 1) ||
+        (mm("(pointer: coarse)") && !mm("(any-pointer: fine)")) || mm("(max-width: 720px)")}; }
+  var q = null, gl = null; try { q = new URLSearchParams(location.search).get("tier"); } catch (e) { /* no URL */ }
+  try { gl = JSON.parse(ss(K) || "null"); } catch (e) { gl = null; }
+  var T = w.tngTier = {decide: decide, signals: signals, forced: /^(low|mid|high)$/.test(q || ""), gl: gl,
+    apply: function () { var t = T.forced ? q : decide(signals(T.gl)); document.documentElement.dataset.tier = t; return t; },
+    probed: function (g) { T.gl = g; ss(K, JSON.stringify(g)); return T.apply(); }};
+  T.apply();
+})(window);
+</script>
+<!-- perf R5: js/app.js and its static imports, fetched in parallel (after the import map; tests/js/ui_static.mjs keeps the list) -->
+<link rel="modulepreload" href="js/app.js"><link rel="modulepreload" href="js/state.js"><link rel="modulepreload" href="js/spectra.js"><link rel="modulepreload" href="js/gallery.js"><link rel="modulepreload" href="js/instrument.js"><link rel="modulepreload" href="js/fit.js"><link rel="modulepreload" href="js/tips.js"><link rel="modulepreload" href="js/features.js"><link rel="modulepreload" href="js/liquidtabs.js"><link rel="modulepreload" href="js/liquidbg.js"><link rel="modulepreload" href="js/uisound.js"><link rel="modulepreload" href="js/galaxies.js"><link rel="modulepreload" href="js/tier.js">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Seeing the Interstellar Medium & Multiphase Mixing Layers","url":"https://ism.tanmaysingh.uk/","applicationCategory":"EducationalApplication","operatingSystem":"Any (web browser)","description":"Explore 12-ion UV/EUV/X-ray absorption spectra and 3D WebGL2 radiative-transfer volumes across multiphase interstellar medium patches and sub-parsec radiative turbulent mixing layers, with a universal Bring-Your-Own-Simulation CLI.","author":{"@type":"Person","name":"Tanmay Singh","url":"https://tanmaysingh.uk/"},"isAccessibleForFree":true,"codeRepository":"https://github.com/tanmay-starslab/ism-absorber-explorer"}</script>
+</head>
+<body data-tab="spectra">
+<header id="top" class="glass" data-testid="topbar">
+  <h1 id="title" data-testid="title">ISM &amp; Mixing Layers</h1>
+  <div role="tablist" id="tabs" aria-label="Views"><button role="tab" id="tab-spectra" data-tip="Mock absorption spectra of the selected sightline" aria-controls="panel-spectra" aria-selected="true" tabindex="0" type="button">Spectra</button><button role="tab" id="tab-3d" data-tip="The galaxy in 3D: gas, ions, velocities, stars and sightlines" aria-controls="panel-3d" aria-selected="false" tabindex="-1" type="button">3D</button></div>
+  <span class="sep hide-m"></span>
+  <!-- galaxy picker (galaxy-sample web contract; js/galaxies.js): shown only when CFG.galaxies lists two or more galaxies -->
+  <div class="grp" id="grp-gal" role="group" aria-label="Galaxy" hidden><span class="gl">Galaxy</span>
+    <button class="pbtn" id="gxy-open" type="button" data-testid="galaxy-open" aria-haspopup="dialog" aria-controls="gxy-pop" aria-expanded="false" data-tip="Pick a galaxy from the TNG50 and FIRE-2 sample"><svg class="gxg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><ellipse cx="8" cy="8" rx="6.4" ry="2.6" transform="rotate(-20 8 8)"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/></svg><span class="glab" data-id="">488530</span><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg></button>
+  </div>
+  <div class="grp" id="grp-sight" role="group" aria-label="Sightline"><span class="gl">Sightline</span>
+    <button class="pbtn sq" id="prev" type="button" aria-label="Previous sightline" data-tip="Previous sightline in the list (k)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3 5 8l5 5"/></svg></button>
+    <button class="pbtn" id="gal-open" type="button" data-testid="gallery-open" aria-haspopup="dialog" aria-controls="gal-pop" aria-expanded="false" data-tip="Pick a sightline by orientation, b or Φ"><span class="slab" data-id="">loading</span><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg></button>
+    <button class="pbtn sq" id="next" type="button" aria-label="Next sightline" data-tip="Next sightline in the list (j)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m6 3 5 5-5 5"/></svg></button>
+    <button class="pbtn" id="geo-open" type="button" data-testid="geo-open" aria-haspopup="dialog" aria-controls="geo-pop" aria-expanded="false" data-tip="Cast a new sightline from orientation, impact parameter and azimuth"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 3v10M3 8h10"/></svg>New ray</button>
+  </div>
+  <span class="sp"></span>
+  <span id="pill" class="hide-m" data-state="offline" role="status" aria-live="polite">probing</span>
+  <div class="cl hide-m" id="cl-act" role="group" aria-label="Find and ask">
+    <a class="pbtn hide-m" id="req-link" data-testid="req-link" href="../" data-req="" data-tip="S/N and resolving power needed to detect and resolve absorbers"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 13.5h12M2.5 13.5V2.5"/><path d="M3.5 11.5c2.2 0 2.8-6.5 4.5-6.5s1.8 4.2 3.2 4.2 1.8-5.2 3.3-5.2"/></svg><span class="lbl">Detect</span></a>
+    <button class="pbtn hide-m" id="find-toggle" type="button" aria-haspopup="dialog" aria-controls="find-pop" aria-expanded="false" data-tip="Find sightlines by their fitted Voigt components"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 4h7M2 8h5M2 12h4"/><circle cx="11.5" cy="9.5" r="2.6"/><path d="m13.4 11.4 1.8 1.8"/></svg><span class="lbl">Find</span></button>
+    <button class="pbtn primary" id="chat-open" type="button" aria-haspopup="dialog" data-tip="Ask in plain language; the chat drives the page's controls" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3h11v7.5H8l-3.2 2.7v-2.7H2.5z"/></svg><span class="lbl">Ask</span></button>
+  </div>
+  <div class="cl" id="cl-learn" role="group" aria-label="Learn">
+    <button class="ib info" id="info-read" type="button" data-testid="info-read" data-info="read" aria-controls="pop-read" aria-expanded="false" aria-label="How to read" data-tip="How to read the panels, ticks, arrows and overlays"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6.3"/><path d="M8 7.2v4M8 4.8v.2" stroke-linecap="round"/></svg></button>
+    <button class="ib info" id="info-methods" type="button" data-testid="info-methods" data-info="methods" aria-controls="pop-methods" aria-expanded="false" aria-label="Data and methods" data-tip="Simulation, ionisation, atomic data and fitting methods"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="8" cy="4" rx="5" ry="2"/><path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/></svg></button>
+    <button class="ib info" id="info-licence" type="button" data-testid="info-licence" data-info="licence" aria-controls="pop-licence" aria-expanded="false" aria-label="Data and credits" data-tip="Data and credits: simulation, spectra, code"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6.3"/><path d="M10.2 6.3a2.6 2.6 0 1 0 0 3.4" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="cl hide-m" id="cl-share" role="group" aria-label="Share and source">
+    <a class="ib hide-m" id="gh-link" data-testid="gh-link" href="https://github.com/tanmay-starslab/ism-absorber-explorer" target="_blank" rel="noopener" aria-label="Source code on GitHub" data-tip="Source code on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38l-.01-1.49c-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48l-.01 2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+  </div>
+  <div class="cl" id="cl-prefs" role="group" aria-label="Preferences">
+    <button class="ib" id="sfx" type="button" role="switch" aria-checked="false" aria-label="Sound effects" data-tip="Sound effects"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2h2.3L8 3.6v8.8L4.8 9.8H2.5z"/><path class="w" d="M10.5 6a2.8 2.8 0 0 1 0 4M12.4 4.3a5.2 5.2 0 0 1 0 7.4"/><path class="x" d="m10.6 6.2 3.4 3.6M14 6.2l-3.4 3.6"/></svg></button>
+    <button class="ib" id="theme" type="button" aria-label="Theme: auto" data-tip="Theme auto: follows your system; click for light" data-mode="auto"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6.3"/><path d="M8 1.7v12.6A6.3 6.3 0 0 0 8 1.7z" fill="currentColor"/></svg></button>
+    <button class="ib hide-m" id="side-toggle" type="button" aria-controls="side" aria-expanded="true" aria-label="Hide the side column" data-tip="Hide the side column"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.8" y="2.5" width="12.4" height="11" rx="2"/><path d="M10 2.5v11"/></svg></button>
+    <button class="ib" id="controls-open" type="button" aria-controls="side" aria-expanded="false" aria-label="Controls" data-tip="Instrument, velocity and overlay controls"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/><circle cx="5" cy="4" r="1.5" fill="var(--bg)"/><circle cx="11" cy="8" r="1.5" fill="var(--bg)"/><circle cx="7" cy="12" r="1.5" fill="var(--bg)"/></svg></button>
+  </div>
+</header>
+<div class="banner" id="apibanner" role="alert" hidden><span id="apibanner_t"></span><button id="apireset" class="pbtn" type="button">Reset to default server</button></div>
+<div id="shell">
+  <section id="panel-spectra" class="glass" role="tabpanel" aria-labelledby="tab-spectra" tabindex="-1">
+    <div id="plotbar">
+      <div class="grp" id="grp-layout" role="group" aria-label="Layout"><span class="gl">Layout</span>
+        <div class="seg" id="layout" role="radiogroup" aria-label="Layout">
+          <label><input type="radio" name="layout" value="1" data-testid="layout-1" data-tip="One panel per line, at the R and S/N set in Instrument"><span>Single</span></label>
+          <label><input type="radio" name="layout" value="2R" data-testid="layout-2R" data-tip="Same line at two resolving powers R, side by side"><span>Compare R</span></label>
+          <label><input type="radio" name="layout" value="2SN" data-testid="layout-2SN" data-tip="Same line at two signal-to-noise levels, side by side"><span>Compare S/N</span></label>
+          <label><input type="radio" name="layout" value="4" data-testid="layout-4" data-tip="Two R by two S/N: four panels per line"><span>Compare both</span></label>
+        </div>
+      </div>
+      <div class="grp" id="grp-lines" role="group" aria-label="Lines"><span class="gl">Lines</span>
+        <button class="pbtn" id="ion-open" type="button" data-testid="ion-select" aria-haspopup="dialog" aria-controls="ion-pop" aria-expanded="false" data-tip="Choose the lines to show; rows run cool to hot"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 4h12M2 8h8M2 12h10"/></svg><span class="n">0</span></button>
+        <div id="ion-chips"></div>
+      </div>
+    </div>
+    <div id="story-row" data-testid="story-row"><a id="story-cta" class="story-cta" data-testid="story-cta" data-story="" href="learn/how-a-spectrum-is-made/" data-tip="Follow one sightline through this galaxy and watch this spectrum form"><svg class="sc-beam" viewBox="0 0 18 10" aria-hidden="true"><path d="M1 5h10.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".6"/><circle cx="14.6" cy="5" r="2.7" fill="currentColor"/></svg><span class="sc-q">How was this made?</span><span class="sc-go">Follow the light <span aria-hidden="true">→</span></span></a><img class="sh-art" data-testid="story-art" alt="" decoding="async" hidden><span id="story-hint" class="sh-t" data-testid="story-hint" hidden>Every dip below is the shadow of gas along one sightline. <b>See it form, cell by cell.</b></span><button type="button" class="sh-x" data-testid="story-hint-close" aria-label="Dismiss this hint" hidden><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="m2 2 8 8M10 2l-8 8"/></svg></button></div>
+    <div id="spectra" data-testid="spectra" tabindex="0" aria-label="Spectra: drag or use the arrow keys to pan, plus and minus to zoom, Home to reset"><canvas id="cv" role="img" aria-label="Spectra"></canvas><div id="hitboxes"></div></div>
+    <div id="vaxis" hidden><canvas id="vaxis-cv" aria-hidden="true"></canvas><button type="button" id="more-below" data-tip="Scroll down to the panels below" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3v9m-3.5-3.5L8 12l3.5-3.5"/></svg><span></span></button></div>
+    <div id="bar"><span id="statusline" data-id="" aria-live="polite"></span><span id="readouts" hidden></span><span id="note" role="status" aria-live="polite"></span><span id="fitstatus" data-testid="fit-status" data-state="idle"></span></div>
+  </section>
+  <aside id="side" aria-label="Controls">
+    <div id="side-head"><button class="grab" id="side-grab" type="button" aria-label="Resize the controls" aria-controls="side"></button><span class="gl">Controls</span><button class="pbtn" id="side-done" type="button">Done</button></div>
+    <div id="mobslot"></div>
+    <div id="v3d-mini" role="button" tabindex="0" aria-label="Open the 3D view" data-tip="Open the full 3D view of this galaxy"><span class="mini-art"></span><div id="v3d-mini-host"></div></div>
+    <section class="glass card" aria-labelledby="h-inst"><h2 id="h-inst">Instrument</h2>
+      <div id="rsliders"></div>
+      <label class="ctl"><span class="k">S/N<sub class="sn1lab" hidden>1</sub></span><input type="range" id="sn-0" data-testid="sn-0" aria-label="S/N" data-tip="Signal-to-noise per resolution element (one FWHM = c/R)"><output id="sn-0-out" for="sn-0"></output></label>
+      <label class="ctl" id="sn1wrap"><span class="k">S/N<sub>2</sub></span><input type="range" id="sn-1" data-testid="sn-1" aria-label="S/N 2" data-tip="Second signal-to-noise level, per resolution element"><output id="sn-1-out" for="sn-1"></output></label>
+    </section>
+    <section class="glass card" aria-labelledby="h-vel"><div class="hd"><h2 id="h-vel">Velocity</h2><button class="lk" id="vreset" type="button" data-testid="view-reset" data-tip="Centre on v = 0, default window (Home on the plot)">Reset view</button></div>
+      <label class="ctl"><span class="k">window</span><input type="range" id="vhw" data-testid="vhw" aria-label="Velocity half-window" data-tip="Half-width of the plotted velocity range, km/s"><output id="vhw-out" for="vhw"></output></label>
+    </section>
+    <section class="glass card" aria-labelledby="h-ovl"><h2 id="h-ovl">Overlay</h2>
+      <label class="tg">Fitted components<input type="checkbox" id="fit" data-testid="fit-toggle" role="switch" data-tip="Voigt fits run in your browser; ticks mark component centres"></label>
+      <label class="tg">Intrinsic<input type="checkbox" id="intr" role="switch" data-tip="Noiseless spectrum before the line-spread function, dashed"></label>
+      <div class="row"><button class="pbtn" id="reroll" type="button" data-tip="Draw a new noise realisation at the same R and S/N">New noise</button>
+        <button class="pbtn" id="dl-open" type="button" aria-haspopup="menu" aria-controls="dl-menu" aria-expanded="false" data-tip="Download the figure as PNG or PDF"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2v8m-3.5-3L8 10.5 11.5 7M3 13.5h10"/></svg>Save</button></div>
+    </section>
+    <footer id="credits-foot" data-testid="credits-foot"><button class="lk" id="credits-open" type="button" data-testid="credits-open" aria-haspopup="dialog" aria-controls="pop-licence" aria-expanded="false">Data and credits</button><span>Simulation: IllustrisTNG TNG50-1 (TNG Collaboration)</span></footer>
+  </aside>
+  <section id="panel-3d" role="tabpanel" aria-labelledby="tab-3d" tabindex="-1" hidden>
+    <div id="v3d-stage" data-testid="v3d-stage"><div id="v3d-root"></div></div>
+    <div id="v3d-controls" data-testid="v3d-controls"><p id="v3d-wait" class="msg" role="status">Loading the 3D view</p><div id="picker-root"></div><div id="v3d-status" aria-live="polite"></div></div>
+  </section>
+</div>
+<!-- phone (<= 820 px) controls dock: live readouts that open the controls sheet, and Ask (app.js placeControls moves #chat-open here) -->
+<div id="dock" class="glass" role="toolbar" aria-label="Quick controls" data-testid="dock"><button class="pbtn" id="dock-open" type="button" aria-haspopup="dialog" aria-controls="side" aria-expanded="false" data-testid="dock-open"><span class="dk-read" id="dock-read" aria-hidden="true"></span><span class="dk-go"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2 4.5h12M2 11.5h12"/><circle cx="5.5" cy="4.5" r="1.7" fill="currentColor"/><circle cx="10.5" cy="11.5" r="1.7" fill="currentColor"/></svg><span class="lbl">Controls</span></span></button></div>
+
+<div class="pop" id="pop-read" role="dialog" aria-label="How to read" hidden><h3>How to read</h3><ul class="plain">
+  <li>Rows are lines, cool to hot. Columns are instrument cases (Layout).</li>
+  <li>Flux is normalised to the continuum; v is the velocity relative to the galaxy's systemic velocity.</li>
+  <li>Stepped line: the degraded spectrum, a Gaussian line-spread function of FWHM c/R with 5 pixels and the given S/N per resolution element. Shading: the noiseless model. Intrinsic (dashed): the noiseless spectrum before the line-spread function.</li>
+  <li>Fitted components: the fitted model in ink, each component in the line colour and a tick at its centre. A hollow tick marks a component on a bound, cut by the time cap, or unconstrained (log N error above 1 dex). An arrow marks a saturated component: its log N is only a lower limit, read as “log N &gt; 14.5 sat”. The readout gives the fitted values, their errors and flags.</li>
+  <li>Drag or use the arrow keys to pan; ctrl or cmd with the wheel, or + and −, zoom; Home resets.</li>
+  <li>3D: drag to orbit, scroll to zoom, click a sightline to open its spectra.</li></ul>
+  <p class="story-in">New to spectra? <a data-story="" href="learn/how-a-spectrum-is-made/">How an absorption spectrum is made</a> follows one sightline through this galaxy's gas and builds this plot, cell by cell.</p>
+  <p class="story-in">Designing an observation? <a data-req="" href="../">Detect &amp; Resolve</a> maps the resolving power R and S/N needed to detect one absorber or resolve two across all twelve transitions.</p></div>
+<div class="pop" id="pop-story" role="dialog" aria-labelledby="pop-story-h" data-testid="story-card" hidden><img class="ps-art" alt="" decoding="async" hidden>
+  <div class="ps-b"><h3 id="pop-story-h">How an absorption spectrum is made</h3>
+  <p>Follow a quasar's light along one sightline through the gas around this galaxy, and watch the spectrum on this page form, cell by cell.</p>
+  <div class="ps-row"><a class="story-cta" data-story="" data-testid="story-card-go" href="learn/how-a-spectrum-is-made/"><svg class="sc-beam" viewBox="0 0 18 10" aria-hidden="true"><path d="M1 5h10.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".6"/><circle cx="14.6" cy="5" r="2.7" fill="currentColor"/></svg><span class="sc-go">Follow the light <span aria-hidden="true">→</span></span></a><button type="button" class="pbtn" data-testid="story-card-later">Not now</button></div></div></div>
+<div class="pop" id="pop-methods" role="dialog" aria-label="Data and methods" hidden><h3>Data and methods</h3>
+  <p id="about-gal">Sightlines through the circumgalactic medium of one TNG50-1 galaxy (subhalo 488530 at z = 0), labelled by orientation, impact parameter b and azimuth from the projected major axis.</p>
+  <p>Optical depths from Trident on a 0.25 km/s grid, stored at 1 km/s. Velocities are relative to the galaxy's systemic velocity.</p>
+  <p id="methods-ions">H I: TNG neutral fraction (self-shielding included); metal ions: Trident HM2012 table, solar ratios scaled by metallicity.</p>
+  <p id="methods-atomic">Atomic data follow Trident 1.4.2 (O VI 1031.912 Å and C IV 1548.187 Å, 3 to 4 km/s from Morton 2003); O VII from Verner et al. 1996. Damped H I wings use Trident's Γ = 4.69 × 10⁸ s⁻¹ against the standard damping constant 6.265 × 10⁸ (Morton 2003), so damped log N fitted here sits about 0.13 dex above VPFIT-style fits of the same wings. Saturated components are lower limits.</p>
+  <p>The degradation and the Voigt fits run in your browser: Levenberg–Marquardt on (log N, b, v) through the line-spread function, seeded from the intrinsic component catalogue and pruned by ΔBIC. Noise matches the publication figure only statistically.</p>
+  <p>3D: every gas cell and star particle deposited into five nested 256³ cubes from ±400 kpc (L0) down to ±1.5 kpc (L4, 12 pc voxels) with 3D dust lanes, fetched from public Hugging Face datasets. 3D velocities are mass-weighted means per voxel in the galaxy's rest frame (no Hubble flow added; v<sub>x</sub>, v<sub>y</sub> and v<sub>z</sub> each clipped at <span id="methods-vcap">the top of the 3D velocity window</span>). v<sub>los</sub> and σ<sub>los</sub> follow the camera ray every frame, and positive v<sub>los</sub> recedes from you, as in the spectra; σ<sub>los</sub> is the spread between voxels, without thermal or within-voxel motion. Find searches the fitted components of every sightline. Ask drives the page in plain language across all 221 TNG50 and FIRE-2 galaxies, either directly in your browser or through the sightline server's Claude backend.</p></div>
+<div class="pop" id="pop-licence" role="dialog" aria-labelledby="pop-licence-h" data-testid="credits" hidden><h3 id="pop-licence-h">Data and credits</h3>
+  <section><h4>Simulation</h4>
+  <p id="lic-sim-tng">IllustrisTNG, TNG50-1 at z = 0 (snapshot 99, 198 Milky Way and M31 analogues), from the <a href="https://www.tng-project.org/data/" rel="noopener">TNG public data release</a> (publicly available; access requires a free account and acceptance of the TNG terms of use). The simulation is described in Nelson et al. 2019a (<a href="https://doi.org/10.1186/s40668-019-0028-x" rel="noopener">Computational Astrophysics and Cosmology 6, 2</a>), Nelson et al. 2019b (<a href="https://doi.org/10.1093/mnras/stz2306" rel="noopener">MNRAS 490, 3234</a>) and Pillepich et al. 2019 (<a href="https://doi.org/10.1093/mnras/stz2338" rel="noopener">MNRAS 490, 3196</a>), with the Milky Way and M31 sample of Pillepich et al. 2024 (<a href="https://doi.org/10.1093/mnras/stae2125" rel="noopener">MNRAS 535, 1721</a>).</p>
+  <p id="lic-sim-fire">FIRE-2 cosmological zoom-in simulations at z = 0 (snapshot 600, 23 halos), from the <a href="http://flathub.flatironinstitute.org/fire" rel="noopener">FIRE public data release</a> (Wetzel et al. 2023, <a href="https://doi.org/10.3847/1538-4365/acb99a" rel="noopener">ApJS 265, 44</a>; <a href="https://fire.northwestern.edu/data/" rel="noopener">fire.northwestern.edu</a>), run with GIZMO (Hopkins 2015, <a href="https://doi.org/10.1093/mnras/stv195" rel="noopener">MNRAS 450, 53</a>) and the FIRE-2 physics model (Hopkins et al. 2018, <a href="https://doi.org/10.1093/mnras/sty1690" rel="noopener">MNRAS 480, 800</a>): Latte Milky Way-mass halos m12b, m12c, m12f, m12i, m12m, m12r, m12w and m12z (Wetzel et al. 2016, <a href="https://doi.org/10.3847/2041-8205/827/2/L23" rel="noopener">ApJL 827, L23</a>; Garrison-Kimmel et al. 2017, <a href="https://doi.org/10.1093/mnras/stx1710" rel="noopener">MNRAS 471, 1709</a>; Samuel et al. 2020, <a href="https://doi.org/10.1093/mnras/stz3054" rel="noopener">MNRAS 491, 1471</a>), ELVIS on FIRE Local Group pairs Romeo and Juliet, Romulus and Remus, Thelma and Louise (Garrison-Kimmel et al. 2019, <a href="https://doi.org/10.1093/mnras/stz1317" rel="noopener">MNRAS 487, 1380</a>), and Core dwarf halos m11b, m11d, m11e, m11h, m11i, m11q, m10q, m10v and m09 (Chan et al. 2018, <a href="https://doi.org/10.1093/mnras/sty1153" rel="noopener">MNRAS 478, 906</a>; El-Badry et al. 2018, <a href="https://doi.org/10.1093/mnras/stx2482" rel="noopener">MNRAS 473, 1930</a>).</p>
+  <p>We thank the IllustrisTNG and FIRE collaborations and the Flatiron Institute for making these simulations public. Galaxy cutouts and snapshots from the public releases were processed into the spectra and 3D views shown here.</p>
+  <p class="ack">The IllustrisTNG simulations were undertaken with compute time awarded by the Gauss Centre for Supercomputing (GCS) under GCS Large-Scale Projects GCS-ILLU and GCS-DWAR on the GCS share of the supercomputer Hazel Hen at the High Performance Computing Center Stuttgart (HLRS), as well as on the machines of the Max Planck Computing and Data Facility (MPCDF) in Garching, Germany. The FIRE-2 simulations were run using XSEDE/ACCESS, NASA HEC, Blue Waters, Frontera and Flatiron Institute Scientific Computing Core resources.</p></section>
+  <section><h4>Spectra</h4>
+  <p id="lic-spectra">TNG50 subhalo 488530, the 23 FIRE-2 zoom-in halos, their sightline libraries and the rays you cast: Trident (Hummels, Smith and Silvia 2017, <a href="https://doi.org/10.3847/1538-4357/aa7e2d" rel="noopener">ApJ 847, 59</a>) on yt (Turk et al. 2011, <a href="https://doi.org/10.1088/0067-0049/192/1/9" rel="noopener">ApJS 192, 9</a>) with the HM2012 UV background (Haardt and Madau 2012, <a href="https://doi.org/10.1088/0004-637X/746/2/125" rel="noopener">ApJ 746, 125</a>); H I from the simulation neutral fraction.</p>
+  <p>The 197 other TNG50 Milky Way and M31 analogues: rays through the TNG50 Voronoi mesh traced by THOR (Byrohl &amp; Nelson 2025, <a href="https://arxiv.org/abs/2507.11603" rel="noopener">arXiv:2507.11603</a>), ion fractions from CLOUDY (Ferland et al. 2017) with the FG11 UV background (Faucher-Giguère et al. 2009) and Rahmati et al. (2013) H I self-shielding. 3D ion cubes across all 221 galaxies: Trident, HM2012; 3D stellar cubes: Lupton et al. (2004) g, r, i composite with Bruzual &amp; Charlot (2003) and FSPS stellar populations and 3D cold-gas dust extinction.</p></section>
+  <section><h4>Code and data</h4>
+  <p>Code: MIT, <a href="https://github.com/tanmay-starslab/cgm-absorber-requirements" rel="noopener">github.com/tanmay-starslab/cgm-absorber-requirements</a>; public 3D and sightline datasets on Hugging Face: <a href="https://huggingface.co/datasets/tanmay-starslab/tng50-sub488530-viz" rel="noopener">tng50-sub488530-viz</a>, <a href="https://huggingface.co/datasets/tanmay-starslab/tng50-mwm31-web-0" rel="noopener">tng50-mwm31-web-{0..3}</a> and <a href="https://huggingface.co/datasets/tanmay-starslab/fire2-core-web-0" rel="noopener">fire2-core-web-{0..3}</a>; yt and the patched Trident BSD-3, three.js MIT, WebLLM and the Qwen2.5-1.5B-Instruct weights Apache-2.0 (the chat's local model only), MediaPipe Face Landmarker and Gesture Recognizer Apache-2.0 (head and hand control); see <a href="https://github.com/tanmay-starslab/cgm-absorber-requirements/blob/main/THIRD_PARTY_LICENSES" rel="noopener">THIRD_PARTY_LICENSES</a>.</p>
+  <p>Privacy: head and tilt control are off until you start them, and run on your device; no camera frame is stored, uploaded or logged.</p></section></div>
+<div class="pop" id="gal-pop" role="dialog" aria-label="Sightlines" hidden>
+  <div class="galcur"><span id="gal-id" class="slab"></span><button class="ib" id="gal-copy" type="button" aria-label="Copy the sightline id" data-tip="Copy this sightline's id"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.6"/><path d="M10.5 5.5V3.6c0-.6-.5-1.1-1.1-1.1H3.6c-.6 0-1.1.5-1.1 1.1v5.8c0 .6.5 1.1 1.1 1.1h1.9"/></svg></button></div>
+  <div class="fl"><input type="search" id="gal-search" data-testid="gallery-search" placeholder="search b, Φ or id" autocomplete="off" aria-controls="gal-list" aria-label="Search sightlines">
+    <select id="filter" aria-label="Filter" data-tip="Show one orientation, or only the rays you cast"><option value="all">all</option><option value="face-on">face-on</option><option value="edge-on">edge-on</option><option value="random">random</option><option value="new">your rays</option></select></div>
+  <ul id="gal-list" role="listbox" aria-label="Sightlines"></ul>
+  <div class="galf"><label><input type="checkbox" id="showcase" data-tip="Only sightlines with multi-component, unsaturated absorbers"> rich absorbers</label><span id="galcount"></span></div></div>
+<div class="pop" id="gxy-pop" role="dialog" aria-label="Galaxies" hidden>
+  <div class="gxycur" id="gxy-cur" data-testid="galaxy-current"></div>
+  <div class="fl"><input type="search" id="gxy-search" data-testid="galaxy-search" placeholder="search id, sat, m*>11, sfr<1" autocomplete="off" aria-controls="gxy-list" aria-label="Search galaxies by id, sat, MW, M31, 3d or a cut such as m*>10.8">
+    <select id="gxy-filter" aria-label="Filter galaxies" data-tip="Show every galaxy, only centrals or only satellites"><option value="all">all</option><option value="central">centrals</option><option value="satellite">satellites</option></select></div>
+  <div class="gxyhead" id="gxy-head" role="group" aria-label="Sort galaxies"></div>
+  <ul id="gxy-list" role="listbox" aria-label="Galaxies" data-testid="galaxy-list"></ul>
+  <div class="galf"><span class="msg">TNG50-1 and FIRE-2 z = 0 galaxies grouped by simulation</span><span id="gxy-count"></span></div></div>
+<div class="pop" id="ion-pop" role="dialog" aria-label="Lines" hidden><div id="ion-list"></div>
+  <div class="pbtns"><button id="ion-all" type="button">All</button><button id="ion-none" type="button" data-tip="Keep only the top line">One</button><button id="ion-default" type="button" data-tip="Back to the default set of lines">Default</button></div></div>
+<div class="pop" id="dl-menu" role="menu" hidden><button id="dlpng" type="button" role="menuitem" data-tip="Figure from the server when online, else the screen as shown">PNG</button><button id="dlpdf" type="button" role="menuitem" data-tip="Vector figure from the sightline server; its noise differs from the screen">Publication PDF</button></div>
+<div class="pop" id="geo-pop" role="dialog" aria-label="New sightline" hidden><h3>New sightline</h3>
+  <form id="geo" novalidate>
+    <fieldset><legend>Orientation</legend><div class="radios">
+      <label><input type="radio" name="orient" value="face-on" data-tip="Ray along the disk normal: the galaxy seen face-on"> face-on</label><label><input type="radio" name="orient" value="edge-on" checked data-tip="Ray in the disk plane: the galaxy seen edge-on"> edge-on</label><label><input type="radio" name="orient" value="random" data-tip="Ray in a random direction, set by the seed"> random</label></div></fieldset>
+    <div class="field"><label for="gb">b [kpc]</label><input id="gb" data-tip="Impact parameter: projected distance from the galaxy centre, kpc" type="number" min="0" max="300" step="1" value="100" inputmode="numeric"></div>
+    <div class="field"><label for="gaz">Φ [deg]</label><input id="gaz" data-tip="Azimuth from the projected major axis, degrees" type="number" min="0" max="359" step="1" value="90" inputmode="numeric"></div>
+    <div class="field"><label for="gseed">seed</label><input id="gseed" data-tip="Seed for the random direction; same seed gives the same direction" type="number" min="0" max="4294967295" step="1" value="1" inputmode="numeric" disabled></div>
+    <button id="submit" class="go" type="submit" data-tip="Load from the library, or cast on the sightline server">Load or generate</button>
+  </form>
+  <div class="prog" id="prog" hidden>
+    <div class="stagebar" id="stagebar" role="progressbar" aria-label="Generation progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span><i></i></span><span><i></i></span><span><i></i></span><span><i></i></span><span><i></i></span><span><i></i></span></div>
+    <div class="stagenames" id="stagenames"><span>queued</span><span>load</span><span>ray</span><span>spectra</span><span>fit</span><span>save</span></div>
+  </div>
+  <p class="msg" id="geomsg" data-code="idle" aria-live="polite">Library sightlines load at once; new ones are cast on the sightline server.</p>
+  <details id="bkd"><summary data-tip="Optional server that casts new rays and renders figures">Sightline server</summary>
+    <div class="field"><label for="apiurl">URL</label><input id="apiurl" data-tip="Address of a sightline server that casts new rays" type="url" placeholder="https://" aria-describedby="apihint"></div>
+    <div class="row"><button id="apisave" class="pbtn" type="button">Use</button><button id="apiclear" class="pbtn" type="button">Clear</button></div>
+    <p class="msg" id="apihint">Also settable with ?api=URL. Library sightlines always come from this site.</p>
+    <div class="backends" id="backends"></div>
+  </details></div>
+<div class="pop" id="find-pop" role="dialog" aria-label="Find by components" hidden><h3>Find by components</h3><div id="find-body"></div></div>
+<div id="chat-root" hidden></div>
+
+<script>
+const DATA = {"version":3,"catalog_url":"data/catalog.json","bin_dir":"data/s/","components_url":"data/components.json","n_static":120,"backends":[],"galaxy":{"sim":"RTML-Athena++","snapshot":100,"redshift":0.0,"subhalo_id":"RTML_50pc","central":true,"TNG_H":1.0,"R200c_kpc":0.025,"M200c_Msun":10000000.0,"Mstar_Msun":100000.0,"SFR_Msun_yr":0.15,"SubhaloVel_kms":[0.0,0.0,0.0],"disk_frame_source":"interface_normal_z_shear_x"},"ions":[{"key":"HI","order":0,"ion":"H I","label":"H I 1216","lam0_A":1215.67,"f":0.416,"gamma_s":469000000.0,"mass_amu":1.008,"band":"uv","color":"#4338CA","color_dark":"#9293F8","damped":true,"fit":{"b_min":8.0,"logN_max":22.5}},{"key":"MgII","order":1,"ion":"Mg II","label":"Mg II 2796","lam0_A":2796.352,"f":0.6123,"gamma_s":261200000.0,"mass_amu":24.305,"band":"uv","color":"#1D4ED8","color_dark":"#6EA8FE","damped":false,"fit":{"b_min":2.0,"logN_max":19.0}},{"key":"SiII","order":2,"ion":"Si II","label":"Si II 1260","lam0_A":1260.422,"f":1.18,"gamma_s":2950000000.0,"mass_amu":28.085,"band":"uv","color":"#0369A1","color_dark":"#4FB3E8","damped":false,"fit":{"b_min":2.0,"logN_max":19.0}},{"key":"CII","order":3,"ion":"C II","label":"C II 1335","lam0_A":1334.532,"f":0.129,"gamma_s":241000000.0,"mass_amu":12.011,"band":"uv","color":"#0E7490","color_dark":"#3CC5D9","damped":false,"fit":{"b_min":2.5,"logN_max":19.0}},{"key":"SiIII","order":4,"ion":"Si III","label":"Si III 1206","lam0_A":1206.5,"f":1.63,"gamma_s":2480000000.0,"mass_amu":28.085,"band":"uv","color":"#0F766E","color_dark":"#34C4B0","damped":false,"fit":{"b_min":2.0,"logN_max":19.0}},{"key":"CIII","order":5,"ion":"C III","label":"C III 977","lam0_A":977.02,"f":0.7586,"gamma_s":1767000000.0,"mass_amu":12.011,"band":"uv","color":"#15803D","color_dark":"#4ADE80","damped":false,"fit":{"b_min":2.5,"logN_max":19.0}},{"key":"SiIV","order":6,"ion":"Si IV","label":"Si IV 1403","lam0_A":1402.77,"f":0.255,"gamma_s":863000000.0,"mass_amu":28.085,"band":"uv","color":"#4D7C0F","color_dark":"#A3D63F","damped":false,"fit":{"b_min":2.0,"logN_max":19.0}},{"key":"CIV","order":7,"ion":"C IV","label":"C IV 1548","lam0_A":1548.187,"f":0.19,"gamma_s":265000000.0,"mass_amu":12.011,"band":"uv","color":"#8A6A00","color_dark":"#E5C33A","damped":false,"fit":{"b_min":2.5,"logN_max":19.0}},{"key":"NV","order":8,"ion":"N V","label":"N V 1239","lam0_A":1238.821,"f":0.156,"gamma_s":340000000.0,"mass_amu":14.007,"band":"uv","color":"#B45309","color_dark":"#F5A524","damped":false,"fit":{"b_min":2.5,"logN_max":19.0}},{"key":"OVI","order":9,"ion":"O VI","label":"O VI 1032","lam0_A":1031.912,"f":0.133,"gamma_s":416000000.0,"mass_amu":15.999,"band":"uv","color":"#C2410C","color_dark":"#FB7A3C","damped":false,"fit":{"b_min":2.5,"logN_max":19.0}},{"key":"NeVIII","order":10,"ion":"Ne VIII","label":"Ne VIII 770","lam0_A":770.409,"f":0.102,"gamma_s":572000000.0,"mass_amu":20.18,"band":"euv","color":"#B91C1C","color_dark":"#F26363","damped":false,"fit":{"b_min":2.0,"logN_max":19.0}},{"key":"OVII","order":11,"ion":"O VII","label":"O VII 21.6","lam0_A":21.6019,"f":0.696,"gamma_s":3320000000000.0,"mass_amu":15.999,"band":"xray","color":"#7F1D1D","color_dark":"#E07A7A","damped":false,"fit":{"b_min":2.5,"logN_max":19.0}}],"bands":{"uv":{"label":"UV","R":{"min":5000,"max":150000,"default":30000,"pair":[15000,50000]},"R_eval":40000},"euv":{"label":"EUV","R":{"min":5000,"max":150000,"default":30000,"pair":[15000,50000]},"R_eval":40000,"note":"rest-frame EUV, observable only as a redshifted analogue"},"xray":{"label":"X-ray","R":{"min":100,"max":5000,"default":1000,"pair":[300,3000]},"R_eval":1000}},"snr":{"min":2,"max":100,"default":10,"pair":[20,5]},"defaults":{"ions":["HI","MgII","SiIII","CIV","OVI"],"layout":"1","vhw_kms":400},"grid":{"dv_native_kms":0.25,"dv_web_kms":1.0,"v_gen_kms":1500,"min_tau":1e-08,"damped_tau_edge":0.01,"damped_v_max_kms":10000,"damped_v_step_kms":500,"damped_logN_min":19.0},"registry_tag":"541fd1952662","fitter":{"worker":"js/fitworker.js","budget_ms":300,"cap_ms":1500,"version":"fit/1"},"frame":{"Lhat":[0.0,0.0,1.0],"xhat":[1.0,0.0,0.0],"yhat":[0.0,1.0,0.0],"R200c_kpc":0.025},"viz":{"manifest_url":"data/viz/manifest_v2.json","base":"data/viz/","fallback_base":null,"dataset":"tanmay-starslab/ism-absorber-explorer"},"js_base":"js/","three":"0.169.0","chat":{"webllm":"0.2.85","model":"Qwen2.5-1.5B-Instruct-q4f16_1-MLC"},"custom":{"r_max_kpc":0.5,"l_min_kpc":0.001,"l_max_kpc":1.0},"galaxies":{"default":"RTML_50pc","base":"data/gal/","viz_base":null,"list":[{"id":"RTML_50pc","sim":"RTML-Athena++","label":"RTML 50 pc (Mixing Layer)","Mstar":100000.0,"SFR":0.15,"M200c":10000000.0,"R200c":0.025,"central":true,"mw":null,"m31":null,"n":120,"viz":true,"src":"trident"},{"id":"ISM_1kpc","sim":"TIGRESS-ISM","label":"ISM 1 kpc (Multiphase Fountain)","Mstar":800000000.0,"SFR":1.25,"M200c":80000000000.0,"R200c":0.5,"central":true,"mw":true,"m31":null,"n":120,"viz":true,"src":"trident"}]}};
+window.TNG_DATA = DATA;
+</script>
+<script>/* Story links before js/app.js runs: each a[data-story] gets the galaxy on screen (hash or query g, else this page's
+   galaxy) as #g=<subhalo>. Once the app is up its story-entry hook (js/app.js) owns these links and adds the sightline,
+   lead ion, R and S/N of the current view (window.__storyEntry set). */
+(function () {
+  var BASE = "learn/how-a-spectrum-is-made/";
+  function gal() {
+    var h = new URLSearchParams(location.hash.replace(/^#/, "")), q = new URLSearchParams(location.search);
+    var v = h.get("g") || q.get("g") || (((window.TNG_DATA || {}).galaxy) || {}).subhalo_id;
+    var m = String(v == null ? "" : v).match(/(\d+)$/);
+    return m ? m[1] : "";
+  }
+  function all() { if (window.__storyEntry) return; var g = gal(), l = document.querySelectorAll("a[data-story]");
+    for (var i = 0; i < l.length; i++) l[i].setAttribute("href", BASE + (g ? "#g=" + g : "")); }
+  addEventListener("hashchange", all);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", all); else all();
+})();
+</script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,306 @@
+"""Generate the registry-derived chat artefacts (design.md §4.3) from tngsight/ions.json.
+
+    python -m server.make_chat_tools            # (re)write every target
+    python -m server.make_chat_tools --check    # exit 1 (and name the stale files) when any target differs
+
+Targets:
+  server/chat_tools.json            the Claude tool definitions (server/chat.py TOOLS reads it)
+  server/chat_system_prompt.txt     the system prompt (server/chat.py SYSTEM_PROMPT reads it)
+  docs/tng50/js/chat.js             blocks /*__GEN:TOOLS__*/, /*__GEN:PROMPT__*/, /*__GEN:IONS__*/
+  docs/tng50/js/search.js           block /*__GEN:QUERY__*/ (ION_SHORT, ION_LABEL, ION_LOGN_MAX, QUERY_SCHEMA)
+
+Only the text between a `/*__GEN:<NAME>__*/` marker and the next `/*__END__*/` is rewritten; the rest of
+the JS files is never touched. The search query schema is tngsight.search.QUERY_SCHEMA verbatim; every
+other bound comes from the registry (bands, snr, grid, KEYS)."""
+from __future__ import annotations
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+TOOLS_JSON = ROOT / "server" / "chat_tools.json"
+PROMPT_TXT = ROOT / "server" / "chat_system_prompt.txt"
+CHAT_JS = ROOT / "docs" / "tng50" / "js" / "chat.js"
+SEARCH_JS = ROOT / "docs" / "tng50" / "js" / "search.js"
+FORBIDDEN = ("·", "•", "‧", "⋅", "・", " . ")   # design.md §6.2 C12
+ID_PATTERN = r"^((face|edge|rand)_b\d{3}_a\d{3}(_s\d+)?|cust_[0-9a-f]{10})$"
+LAYOUTS = ["1", "2R", "2SN", "4"]
+VHW_MIN = 10
+SPECIES_GAS = ["nH", "T", "Z"]
+SPECIES_VEL = ["vlos", "vr", "vphi", "vmag", "sigmalos"]   # derived in the 3D shader from the stored (vx, vy, vz)
+
+N_GALAXIES = 221                 # the page's galaxy sample (docs/tng50 galaxies list; tests/js/chat_tools_sync.mjs checks it)
+N_SBI = 197                      # of them with THOR + CLOUDY FG11 spectra (SBI_CGM); the other is the default galaxy
+DEFAULT_GALAXY = 488530          # Trident HM2012 spectra
+TF_PRESETS = ["ramp", "thor", "nelson16", "iso", "clouds"]   # docs/tng50/js/tf.js PRESETS (viewer3d setTf)
+
+SET_INSTRUMENT_DESC = (
+    "Set the spectrograph and view. R: resolving power per band (one value, or two for the two R cases). "
+    "snr: S/N per resolution element (one value, or two for the two S/N cases). layout: 1 case, 2 cases "
+    "varying R, 2 cases varying S/N, or the 2x2 grid. ions: the ions to plot. vhw: half-width of the velocity "
+    "window (km/s). vc: window centre (km/s). fit: overplot on-the-fly component fits.")
+
+
+def _ceilings(ions) -> str:
+    """The per-ion logN ceilings (registry fit.logN_max) as text, e.g. '22.5 for HI, 19 otherwise'."""
+    vals = {k: float(ions.atomic(k)["logN_max"]) for k in ions.KEYS}
+    num = lambda v: str(int(v)) if v.is_integer() else str(v)          # noqa: E731
+    common = max(set(vals.values()), key=lambda v: sum(1 for x in vals.values() if x == v))
+    odd = [f"{num(v)} for {k}" for k, v in vals.items() if v != common]
+    return ", ".join(odd + [f"{num(common)} otherwise"]) if odd else num(common)
+
+
+def _one_or_two(item: dict) -> dict:
+    return {"anyOf": [dict(item), {"type": "array", "items": dict(item), "minItems": 2, "maxItems": 2}]}
+
+
+def build_tools(ions=None, query_schema=None) -> list:
+    """The ten tools, in the fixed order; registry-derived parts per design.md §4.3."""
+    if ions is None:
+        from tngsight import ions
+    if query_schema is None:
+        from tngsight.search import QUERY_SCHEMA as query_schema
+    keys = list(ions.KEYS)
+    vmax = ions.GRID["v_gen_kms"]
+    R = {"type": "object", "additionalProperties": False, "properties": {
+        b: _one_or_two({"type": "integer", "minimum": int(d["R"]["min"]), "maximum": int(d["R"]["max"])})
+        for b, d in ions.BANDS.items()}}
+    snr = _one_or_two({"type": "integer", "minimum": int(ions.SNR["min"]), "maximum": int(ions.SNR["max"])})
+    set_instrument = {
+        "name": "set_instrument", "description": SET_INSTRUMENT_DESC,
+        "input_schema": {"type": "object", "additionalProperties": False, "properties": {
+            "R": R, "snr": snr,
+            "layout": {"type": "string", "enum": list(LAYOUTS)},
+            "ions": {"type": "array", "items": {"type": "string", "enum": keys}, "minItems": 1,
+                     "maxItems": len(keys), "uniqueItems": True},
+            "vhw": {"type": "integer", "minimum": VHW_MIN, "maximum": int(vmax)},
+            "vc": {"type": "number", "minimum": -int(vmax), "maximum": int(vmax)},
+            "fit": {"type": "boolean"}}}}
+    return [
+        set_instrument,
+        {"name": "select_sightline",
+         "description": "Show an existing sightline by id (as returned by search_sightlines or request_*).",
+         "input_schema": {"type": "object", "additionalProperties": False, "required": ["id"],
+                          "properties": {"id": {"type": "string", "pattern": ID_PATTERN}}}},
+        {"name": "search_sightlines",
+         "description": "Find sightlines by their fitted Voigt components. Returns ranked ids with reasons. "
+                        "Saturated or degenerate components are lower limits on log N, never measurements: one "
+                        "meets logN_min when its lower limit does, and never meets a logN_max below the ion's "
+                        f"ceiling ({_ceilings(ions)}). Reasons count them as lower limits.",
+         "input_schema": {"type": "object", "additionalProperties": False, "required": ["query"],
+                          "properties": {"query": json.loads(json.dumps(query_schema))}}},
+        {"name": "request_sightline",
+         "description": "Load or generate the sightline with this orientation, impact parameter b (kpc) and "
+                        "azimuth (deg from the projected major axis). seed is required for random orientation.",
+         "input_schema": {"type": "object", "additionalProperties": False,
+                          "required": ["orientation", "b_kpc", "azimuth_deg"],
+                          "properties": {"orientation": {"type": "string", "enum": ["face-on", "edge-on", "random"]},
+                                         "b_kpc": {"type": "number", "minimum": 0, "maximum": 300},
+                                         "azimuth_deg": {"type": "number", "minimum": 0, "maximum": 360},
+                                         "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295}}}},
+        {"name": "request_custom_ray",
+         "description": "Generate a straight ray between two points given in kpc relative to the galaxy centre "
+                        "(simulation box axes). |p| <= 395 kpc, length 20-800 kpc.",
+         "input_schema": {"type": "object", "additionalProperties": False, "required": ["p0_kpc", "p1_kpc"],
+                          "properties": {
+                              "p0_kpc": {"type": "array", "items": {"type": "number", "minimum": -395, "maximum": 395},
+                                         "minItems": 3, "maxItems": 3},
+                              "p1_kpc": {"type": "array", "items": {"type": "number", "minimum": -395, "maximum": 395},
+                                         "minItems": 3, "maxItems": 3}}}},
+        {"name": "show_3d",
+         "description": "Open the 3D tab, optionally choosing the gas field, camera preset, render mode (integral: "
+                        "projected; volume: volume rendering) and volume colour preset tf (ramp default, thor gas "
+                        "phases on temperature, nelson16 temperature shells of Nelson+16, iso bands, clouds; tf implies volume mode). Velocity views "
+                        "(km/s, galaxy rest frame): vlos line-of-sight velocity, vr radial, vphi rotational, "
+                        "vmag speed, sigmalos line-of-sight dispersion; vlos and sigmalos follow the camera.",
+         "input_schema": {"type": "object", "additionalProperties": False, "properties": {
+             "species": {"type": "string", "enum": SPECIES_GAS + keys + SPECIES_VEL},
+             "preset": {"type": "string", "enum": ["face-on", "edge-on", "sightline"]},
+             "mode": {"type": "string", "enum": ["integral", "volume"]},
+             "tf": {"type": "string", "enum": list(TF_PRESETS)}}}},
+        {"name": "get_page_state",
+         "description": "The full page state: the open galaxy and its properties, the shown sightline, the tab, the 3D "
+                        "view and the instrument. The [page ...] snapshot before each user message is its short form.",
+         "input_schema": {"type": "object", "additionalProperties": False, "properties": {}}},
+        {"name": "list_galaxies",
+         "description": f"List galaxies of the sample ({N_GALAXIES} TNG50-1 Milky Way and M31 analogues plus FIRE-2 zoom-in galaxies at z = 0), "
+                        "filtered and sorted. Masses are log10 solar masses, SFR solar masses per year. Most massive: "
+                        "sort Mstar, order desc. query takes picker words: an id or name prefix (e.g. m12i, Romeo), fire2, tng50, central, satellite, mw, m31, "
+                        "gas-poor, m*>10.8, sfr<1. Default sort Mstar desc, limit 10.",
+         "input_schema": {"type": "object", "additionalProperties": False, "properties": {
+             "sim": {"type": "string", "enum": ["TNG50", "FIRE-2"]},
+             "sort": {"type": "string", "enum": ["Mstar", "M200c", "SFR", "id"]},
+             "order": {"type": "string", "enum": ["desc", "asc"]},
+             "central": {"type": "boolean"},
+             "gas_poor": {"type": "boolean"},
+             "spectra": {"type": "string", "enum": ["THOR", "Trident"]},
+             "logMstar_min": {"type": "number", "minimum": 8, "maximum": 13},
+             "logMstar_max": {"type": "number", "minimum": 8, "maximum": 13},
+             "logM200c_min": {"type": "number", "minimum": 9, "maximum": 15},
+             "logM200c_max": {"type": "number", "minimum": 9, "maximum": 15},
+             "sfr_min": {"type": "number", "minimum": 0, "maximum": 1000},
+             "sfr_max": {"type": "number", "minimum": 0, "maximum": 1000},
+             "query": {"type": "string", "maxLength": 80},
+             "limit": {"type": "integer", "minimum": 1, "maximum": 20}}}},
+        {"name": "select_galaxy",
+         "description": "Open another galaxy of the sample by TNG50 subhalo id (integer) or FIRE-2 halo id (e.g. m12i, m12b, Romeo, Juliet, m11b, m09). Its sightline library replaces the current "
+                        "one, so search_sightlines and select_sightline then act on it. Returns its properties, how "
+                        "many sightlines it has and the sightline now shown.",
+         "input_schema": {"type": "object", "additionalProperties": False, "required": ["id"],
+                          "properties": {"id": {"anyOf": [
+                              {"type": "integer", "minimum": 1, "maximum": 999999999},
+                              {"type": "string", "pattern": r"^(?:\d{1,9}|[A-Za-z][A-Za-z0-9_]{1,23})$"}]}}}},
+        {"name": "set_view",
+         "description": "Switch the main view to the spectra or the 3D tab.",
+         "input_schema": {"type": "object", "additionalProperties": False, "required": ["tab"],
+                          "properties": {"tab": {"type": "string", "enum": ["spectra", "3d"]}}}},
+    ]
+
+
+def _join(words) -> str:
+    words = list(words)
+    return ", ".join(words[:-1]) + " and " + words[-1] if len(words) > 1 else "".join(words)
+
+
+def build_prompt(ions=None) -> str:
+    """One paragraph; ion list, keys, bands and S/N range from the registry. No dot separators."""
+    if ions is None:
+        from tngsight import ions
+    rows = [ions.get(k) for k in ions.KEYS]
+    labels = ", ".join(r["label"] for r in rows)
+    bands = ", ".join(f"{d['label']} {int(d['R']['min'])} to {int(d['R']['max'])}" for d in ions.BANDS.values())
+    notes = []
+    for b, d in ions.BANDS.items():
+        if d.get("note"):
+            members = [r["label"] for r in rows if r["band"] == b]
+            if members:
+                notes.append(f"{_join(members)} {'is' if len(members) == 1 else 'are'} in the {d['label']} band "
+                             f"({d['note']}). ")
+    s = ions.SNR
+    text = (
+        "You are the assistant of the TNG50 and FIRE-2 sightline explorer, a web page showing mock quasar absorption "
+        f"spectra of {len(rows)} ions ({labels}) through the circumgalactic medium of {N_GALAXIES} simulated "
+        "Milky Way and M31 analogues from TNG50-1 at z = 0 plus FIRE-2 zoom-in galaxies (Latte MW hosts m12b to m12z, Elvis pairs Romeo/Juliet, Romulus/Remus, Thelma/Louise, Core dwarfs m11b to m09). "
+        "Each user message starts with a [page ...] snapshot of the screen, which you can rely on: g is the open "
+        "galaxy (subhalo or halo id, log M*, log M200c, R200c in kpc, SFR, central or satellite, gas-poor, spectra source, "
+        "number of sightlines), s the shown sightline (id, orientation, impact parameter b in kpc, azimuth), tab, "
+        "the 3D view and the instrument. "
+        f"Tool arguments name the ions by key: {', '.join(ions.KEYS)}. "
+        + "".join(notes) +
+        "You act on the page only by calling the provided tools; the page executes them and returns JSON results. "
+        "search_sightlines and select_sightline work on the open galaxy: to act on another galaxy, call "
+        "select_galaxy first (list_galaxies finds galaxies by simulation, mass, SFR or type), then search or select. "
+        "Use set_instrument for the resolving power R per band "
+        f"({bands}), the S/N per resolution element ({int(s['min'])} to {int(s['max'])}), the layout, the ions "
+        "shown and the velocity window, show_3d for the gas distribution, set_view to switch tabs, and "
+        "request_sightline or request_custom_ray only when the user asks for a new sightline (generation takes "
+        "one to two minutes and the page opens it when ready). "
+        "Every number, id or property about this data (sightline and galaxy ids, galaxy properties, log N, "
+        "components, b) must come from a tool result, the page snapshot or the user; never invent ids. If the "
+        "data tools cannot answer, say what the page can do instead. "
+        "You may answer general questions about the field from your own knowledge: CGM physics, ionisation, "
+        "O VI and Ne VIII, Lyman-limit and damped systems, Voigt profiles, column densities, spectral resolution "
+        "and S/N, HST/COS, TNG50 (Nelson et al. 2019a,b, Pillepich et al. 2019, 2024), FIRE-2 (Hopkins et al. 2018, Wetzel et al. 2016, 2023, Garrison-Kimmel et al. 2019, Chan et al. 2018) and how these mock spectra were made. Mark such answers plainly, starting with "
+        "\"In general,\", and never invent citations. The mock spectra: for the "
+        f"{N_SBI} THOR galaxies, THOR (Byrohl & Nelson 2025) traces rays through the TNG50 Voronoi mesh with CLOUDY ion fractions "
+        f"under the FG11 UV background; for subhalo {DEFAULT_GALAXY} and the 23 FIRE-2 halos, Trident (Hummels et al. 2017) with the HM2012 background. "
+        "The 3D tab raymarches 5 nested 256^3 cubes across all 221 galaxies from +-400 kpc (L0) to +-1.5 kpc (L4, 12 pc voxels) with S0 to S4 stars, 3D dust lanes, log shell width slider, Hands-free webcam control (video stays on device), and Save for PNG export and ?cam= links. "
+        "The show_3d velocity views are mass-weighted gas velocities in the "
+        "galaxy rest frame without Hubble flow: vlos is positive moving away from the camera (redshifted), vr "
+        "positive for outflow, vphi positive for co-rotation with the disk. Velocities are km/s relative to the "
+        "galaxy's systemic velocity; column densities are log10 cm^-2; distances are kpc. A fitted component "
+        "given as logN_lower (saturated, or degenerate with no errors) is a lower limit: say log N > that value, "
+        "never quote it as a measured column. Companion pages cover How a Spectrum Is Made and Detect and Resolve Requirements. Keep answers short and friendly, and when useful suggest one "
+        "concrete next step on the page.")
+    bad = [c for c in FORBIDDEN if c in text]
+    if bad:
+        raise ValueError(f"system prompt contains forbidden separators {bad!r}")
+    return text
+
+
+def _js(obj) -> str:
+    return json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
+
+
+def js_blocks(tools, prompt, ions=None, query_schema=None) -> dict:
+    if ions is None:
+        from tngsight import ions
+    if query_schema is None:
+        from tngsight.search import QUERY_SCHEMA as query_schema
+    short = {k: ions.get(k)["ion"] for k in ions.KEYS}
+    label = {k: ions.get(k)["label"] for k in ions.KEYS}
+    logn_max = {k: ions.atomic(k)["logN_max"] for k in ions.KEYS}       # = tngsight.search.LOGN_MAX
+    return {
+        "chat": {
+            "TOOLS": f"export const TOOLS = {_js(tools)};",
+            "PROMPT": f"export const SYSTEM_PROMPT = {_js(prompt)};",
+            "IONS": f"const ION_KEYS = {_js(list(ions.KEYS))};"},
+        "search": {
+            "QUERY": (f"export const ION_SHORT = {_js(short)};\n"
+                      f"export const ION_LABEL = {_js(label)};\n"
+                      f"export const ION_LOGN_MAX = {_js(logn_max)};\n"
+                      f"export const QUERY_SCHEMA = {_js(query_schema)};")},
+    }
+
+
+def _block_re(name):
+    return re.compile(r"(/\*__GEN:" + re.escape(name) + r"__\*/\n)(.*?)(\n/\*__END__\*/)", re.S)
+
+
+def splice(text: str, blocks: dict, where="") -> str:
+    """Replace each named block's body; every marker must be present exactly once."""
+    for name, body in blocks.items():
+        rx = _block_re(name)
+        n = len(rx.findall(text))
+        if n != 1:
+            raise ValueError(f"{where}: marker /*__GEN:{name}__*/ ... /*__END__*/ found {n} times (need 1)")
+        text = rx.sub(lambda m: m.group(1) + body + m.group(3), text)
+    return text
+
+
+def read_block(text: str, name: str) -> str:
+    m = _block_re(name).search(text)
+    return None if m is None else m.group(2)
+
+
+def targets() -> dict:
+    """{path: wanted text} for every generated file."""
+    tools = build_tools()
+    prompt = build_prompt()
+    blocks = js_blocks(tools, prompt)
+    return {
+        TOOLS_JSON: json.dumps(tools, indent=1, ensure_ascii=False) + "\n",
+        PROMPT_TXT: prompt + "\n",
+        CHAT_JS: splice(CHAT_JS.read_text(encoding="utf-8"), blocks["chat"], CHAT_JS.name),
+        SEARCH_JS: splice(SEARCH_JS.read_text(encoding="utf-8"), blocks["search"], SEARCH_JS.name),
+    }
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--check", action="store_true", help="verify only; exit 1 when a target is stale")
+    a = ap.parse_args(argv)
+    stale = []
+    for path, want in targets().items():
+        have = path.read_text(encoding="utf-8") if path.is_file() else None
+        if have == want:
+            continue
+        stale.append(path.relative_to(ROOT).as_posix())
+        if not a.check:
+            tmp = path.with_name(f".{path.name}.part")
+            tmp.write_text(want, encoding="utf-8")
+            tmp.replace(path)
+    if a.check:
+        if stale:
+            print("stale (run python -m server.make_chat_tools): " + ", ".join(stale))
+            return 1
+        print("chat artefacts up to date")
+        return 0
+    print("wrote " + ", ".join(stale) if stale else "chat artefacts already up to date")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

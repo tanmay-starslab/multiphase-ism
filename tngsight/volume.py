@@ -1,0 +1,886 @@
+"""Nested raw-resolution gas cubes for the 3D viewer (Phase-2b design §4.1, decisions D1–D7).
+
+Every gas cell of the slim cutout (original Arepo resolution) is scattered with its own cubic-spline kernel onto
+three nested 256³ disk-frame cubes by the conservative `tngsight.deposit.scatter`:
+
+    L0 ±400 kpc (Δ 3.125 kpc)   L1 ±100 kpc (Δ 0.78125 kpc)   L2 ±25 kpc (Δ 0.1953125 kpc)
+
+Per cell (slim-cutout order, `cell_arrays`): disk-frame position d = (x − center_kpc) @ Rᵀ, smoothing length
+h = 2.0·(3V/4π)^{1/3} with V = Masses/Density (yt's Arepo `smoothing_length`, the kernel of every Trident ray), the
+yt/Trident fields n_H, the 12 registry ion densities n(ion) (tngsight.ions), T and Z/Z_sun of
+`tngsight.generate.Generator`. One scatter per level deposits the extensive quantities (`extensive`) N_nH,
+N_<ion> = n·V, m, m·T and m·Z (only those the requested fields need, `quantities_for`), so
+
+    density = Σ N / V_vox           (cm⁻³; conserves every atom/ion in the box, sub-voxel cells included)
+    T, Z    = Σ m·X / Σ m           (mass-weighted; 0 = empty where Σ m = 0)
+
+and L0 voxels whose centre lies at r > 400 kpc are empty (`R_MASK_KPC`). The cubes are shipped as log10 → uint8
+with the FULL value range (no percentile clip), shared by L0–L2 per field (design §2.3), as WebP z-slice atlases plus
+a gzip raw fallback with content-hashed names (§2.4–2.6), described by `gas/manifest_gas.json` (§3.3).
+
+The shared encoding/atlas/manifest helpers live in `tngsight.vizpack` (CORE, D13). When that module is not
+importable, the private `_Compat` twin below — written to the same pinned formulas — is used instead, and the
+fragment's generator block says so (`VIZPACK_IMPL`).
+"""
+from __future__ import annotations
+
+import gzip
+import hashlib
+import io
+import json
+import math
+import os
+import re
+import time
+from pathlib import Path
+from types import SimpleNamespace
+
+import numpy as np
+
+from . import deposit as D
+from . import ions as _ions
+from .config import GALAXY
+
+VOL_VERSION = 2
+GENERATOR = "tngsight.volume/2"
+Z_SUN = 0.0127                                   # TNG convention (design §2.7)
+CM_PER_KPC = GALAXY["CM_PER_KPC"]
+TNG_H = GALAXY["TNG_H"]
+N = 256
+GAS_LEVELS = {"L0": 400.0, "L1": 100.0, "L2": 25.0}
+ALL_GAS_LEVELS = {"L0": 400.0, "L1": 100.0, "L2": 25.0, "L3": 6.25, "L4": 1.5}
+R_MASK_KPC = {"L0": 400.0}                       # gas part of design §2.7 R_MASK_KPC
+ION_KEYS = tuple(_ions.KEYS)
+VOL_KEYS = ("nH", "T", "Z") + ION_KEYS
+# design §3.5: unchanged maps for HI/OVI/CIII; cool ions ice, intermediate viridis, hot magma
+ION_CMAP = {"HI": "tng_ice", "MgII": "tng_ice", "SiII": "tng_ice", "CII": "tng_ice", "SiIII": "tng_ice",
+            "CIII": "viridis", "SiIV": "viridis", "CIV": "viridis", "NV": "viridis",
+            "OVI": "magma", "NeVIII": "magma", "OVII": "magma"}
+
+FIELDS: dict = {
+    "nH": {"label": "n_H", "units": "cm^-3", "kind": "density", "cmap": "tng_dusk",
+           "yt_field": ("gas", "H_nuclei_density")},
+    "T": {"label": "T", "units": "K", "kind": "mass_weighted", "cmap": "inferno",
+          "yt_field": ("gas", "temperature")},
+    "Z": {"label": "Z", "units": "Zsun", "kind": "mass_weighted", "cmap": "cividis",
+          "yt_field": ("gas", "metallicity")},
+}
+for _k in ION_KEYS:
+    FIELDS[_k] = {"label": f"n({_ions.get(_k)['ion']})", "units": "cm^-3", "kind": "density",
+                  "cmap": ION_CMAP[_k], "yt_field": ("gas", _ions.get(_k)["field"]),
+                  "color": _ions.get(_k)["color"]}
+_YT_UNITS = {"nH": "cm**-3", "T": "K", "Z": "", **{k: "cm**-3" for k in ION_KEYS}}
+SOURCES = {
+    "nH": "('gas','H_nuclei_density') * V_cell",
+    **{k: f"('gas','{_ions.get(k)['field']}') * V_cell" for k in ION_KEYS},
+    "T": "mass-weighted ('gas','temperature')",
+    "Z": "mass-weighted ('gas','metallicity') / Z_SUN",
+}
+# Visual-tuning floor (tune round 1; see docs/TNG50_OPERATIONS.md §1b): every gas cell is deposited with at
+# least h = GAS_H_MIN_VOX·Δ of the level (the deposit core's own floor is 1 Δ). With a 1 Δ floor a sub-voxel cell
+# lands in a 2×2×2 stamp, which the trilinear ray march draws as a square tile (cold H I / C III / O VI clumps in the
+# outer CGM); a 2 Δ floor gives round, overlapping footprints. Columns and conservation are unchanged by the floor.
+GAS_H_MIN_VOX = 2.0
+DENSITY_KEYS = ("nH",) + ION_KEYS
+QUANTITIES = ("N_nH",) + tuple(f"N_{k}" for k in ION_KEYS) + ("m", "mT", "mZ")
+PRIMARY = {"nH": "N_nH", **{k: f"N_{k}" for k in ION_KEYS}, "T": "m", "Z": "m"}
+CELL_NAMES = ("pos_disk", "h", "V_cm3", "m", "nH") + ION_KEYS + ("T", "Z")
+# expected encoding ranges (design §3.4 as amended at integration: nH and HI vmin are the masked p0.5 of the
+# r <= 400 kpc data, measured -6.00 and -12.29): field -> ((vmin, tol), (vmax, tol)); T/Z are measured
+# Velocity components (vel3d contract, notes/vel3d/design.md): per cell v_disk = (Velocities − SubhaloVel) @ Rᵀ
+# (km/s; Velocities are km/s·√a with a = 1 at z = 0; no Hubble flow added), deposited as the extensive m·v_i through
+# the same scatter/kernel/floor as T and Z, so v_i = Σ m·v_i / Σ m per voxel (NaN = empty where Σ m = 0 or outside
+# the L0 mask). Shipped with the signed "linear" u8 encoding (vizpack.quantize_linear) and one ±V for all three
+# components and levels (vizpack.vel_range over L0).
+VEL_KEYS = ("vx", "vy", "vz")
+ALL_KEYS = VOL_KEYS + VEL_KEYS
+VEL_QUANTITIES = ("mvx", "mvy", "mvz")
+ALL_QUANTITIES = QUANTITIES + VEL_QUANTITIES
+VEL_CELL_NAMES = ("vel_disk",)                    # (N, 3) float64 km/s, slim-cutout (h5py) order
+VEL_FRAME = "disk (xhat, yhat, Lhat), relative to SubhaloVel"
+for _i, _k in enumerate(VEL_KEYS):
+    FIELDS[_k] = {"label": f"v_{'xyz'[_i]}", "units": "km/s", "kind": "velocity", "encoding": "linear",
+                  "component": "xyz"[_i], "cmap": "tng_vel"}
+    SOURCES[_k] = (f"mass-weighted PartType0/Velocities (km/s, a = 1) minus SubhaloVel, rotated to the disk frame "
+                   f"(component {'xyz'[_i]} = {('xhat', 'yhat', 'Lhat')[_i]}); no Hubble flow")
+    PRIMARY[_k] = "m"
+EXPECTED_RANGE = {"nH": ((-6.0, 0.3), (0.5, 0.2)), "OVI": ((-16.2, 0.4), (-5.6, 0.2)),
+                  "HI": ((-12.3, 0.4), (-0.6, 0.2)), "CIII": ((-20.5, 0.5), (-2.8, 0.2))}
+
+
+# ============================================================================== vizpack (CORE) or its twin
+class _Compat:
+    """Private implementation of the vizpack functions U_gas needs, following design §2.2–2.6 and §3.2 verbatim.
+    Used only when `tngsight.vizpack` is not importable."""
+    GENERATOR = "tngsight.volume/2:vizpack-compat"
+    SLICES_PER_PART, PARTS, COLS, ROWS = 64, 4, 16, 4
+
+    @staticmethod
+    def voxel_centers(n, half):
+        dx = 2.0 * float(half) / int(n)
+        return -float(half) + (np.arange(int(n)) + 0.5) * dx
+
+    @staticmethod
+    def radial_mask(n, half, r_kpc):
+        c = _Compat.voxel_centers(n, half)
+        r2 = c[:, None, None] ** 2 + c[None, :, None] ** 2 + c[None, None, :] ** 2
+        return r2 <= float(r_kpc) ** 2
+
+    @staticmethod
+    def snap_down(x):
+        return math.floor(round(10.0 * float(x), 6)) / 10.0
+
+    @staticmethod
+    def snap_up(x):
+        return math.ceil(round(10.0 * float(x), 6)) / 10.0
+
+    @staticmethod
+    def _valid(values, mask):
+        v = np.asarray(values, dtype=np.float64)
+        with np.errstate(invalid="ignore"):
+            ok = np.isfinite(v) & (v > 0)
+        return ok if mask is None else ok & np.asarray(mask, dtype=bool)
+
+    @staticmethod
+    def gas_range(level_values, level_masks):
+        lo, hi = [], []
+        for v, msk in zip(level_values, level_masks):
+            ok = _Compat._valid(v, msk)
+            if not ok.any():
+                continue
+            lv = np.log10(np.asarray(v, dtype=np.float64)[ok])
+            lo.append(float(np.percentile(lv, 0.5)))
+            hi.append(float(lv.max()))
+        if not lo:
+            raise ValueError("gas_range: no valid voxel on any level")
+        vmin, vmax = _Compat.snap_down(min(lo)), _Compat.snap_up(max(hi))
+        if vmax <= vmin:
+            vmax = round(vmin + 0.1, 1)
+        return vmin, vmax
+
+    @staticmethod
+    def quantize(values, mask, vmin, vmax):
+        v = np.asarray(values, dtype=np.float64)
+        ok = _Compat._valid(v, mask)
+        q = np.zeros(v.shape, dtype=np.uint8)
+        s = (np.log10(v[ok]) - vmin) / (vmax - vmin) * 254.0
+        q[ok] = np.clip(1.0 + np.rint(s), 1, 255).astype(np.uint8)
+        return q
+
+    @staticmethod
+    def dequantize(q, vmin, vmax):
+        q = np.asarray(q)
+        out = vmin + (q.astype(np.float64) - 1.0) * (vmax - vmin) / 254.0
+        out[q == 0] = np.nan
+        return out
+
+    @staticmethod
+    def quantize_linear(values, mask, V):
+        V = float(V)
+        v = np.asarray(values, dtype=np.float64)
+        ok = np.isfinite(v) if mask is None else np.isfinite(v) & np.asarray(mask, dtype=bool)
+        q = np.zeros(v.shape, dtype=np.uint8)
+        q[ok] = np.clip(1.0 + np.rint((np.clip(v[ok], -V, V) + V) / (2.0 * V) * 254.0), 1, 255).astype(np.uint8)
+        return q
+
+    @staticmethod
+    def dequantize_linear(q, V):
+        q = np.asarray(q)
+        out = -float(V) + (q.astype(np.float64) - 1.0) * 2.0 * float(V) / 254.0
+        out[q == 0] = np.nan
+        return out
+
+    @staticmethod
+    def vel_range(components, weights, step=50.0):
+        a = np.concatenate([np.abs(np.asarray(c, dtype=np.float64)).ravel() for c in components])
+        w = np.concatenate([np.asarray(weights, dtype=np.float64).ravel()] * len(components))
+        ok = np.isfinite(a) & np.isfinite(w) & (w > 0)
+        a, w = a[ok], w[ok]
+        o = np.argsort(a, kind="stable")
+        c = np.cumsum(w[o])
+        p = float(a[o][min(int(np.searchsorted(c, 0.999 * c[-1], side="left")), a.size - 1)])
+        return float(max(step, step * math.ceil(round(p / step, 9))))
+
+    @staticmethod
+    def raw_gas(q3):
+        return np.ascontiguousarray(np.asarray(q3, dtype=np.uint8).transpose(2, 1, 0)).tobytes()
+
+    @staticmethod
+    def atlas_parts(q3):
+        q = np.asarray(q3, dtype=np.uint8)
+        n = q.shape[0]
+        S, C, Rw = _Compat.SLICES_PER_PART, _Compat.COLS, _Compat.ROWS
+        parts = []
+        for p in range(_Compat.PARTS):
+            blk = np.zeros((n, n, S), dtype=np.uint8)              # [i, j, s]
+            ks = np.arange(p * S, min((p + 1) * S, q.shape[2]))
+            if ks.size:
+                blk[:, :, :ks.size] = q[:, :, ks]
+            t = blk.transpose(2, 1, 0).reshape(Rw, C, n, n)         # [r, c, j, i]
+            parts.append(np.ascontiguousarray(t.transpose(0, 2, 1, 3).reshape(Rw * n, C * n)))
+        return parts
+
+    @staticmethod
+    def atlas_to_raw(parts, n, channels=1):
+        S, C, Rw = _Compat.SLICES_PER_PART, _Compat.COLS, _Compat.ROWS
+        q = np.zeros((n, n, n), dtype=np.uint8)
+        for p, img in enumerate(parts):
+            a = np.asarray(img)
+            if a.ndim == 3:
+                a = a[..., 0]
+            t = a.reshape(Rw, n, C, n).transpose(0, 2, 1, 3).reshape(S, n, n)    # [s, j, i]
+            for s in range(S):
+                k = p * S + s
+                if k < n:
+                    q[:, :, k] = t[s].T
+        return _Compat.raw_gas(q)
+
+    @staticmethod
+    def encode_webp(img):
+        from PIL import Image
+        a = np.ascontiguousarray(img)
+        im = Image.fromarray(a)
+        if im.mode not in ("L", "RGB"):
+            raise ValueError(f"encode_webp: unexpected mode {im.mode}")
+        buf = io.BytesIO()
+        im.save(buf, "WEBP", lossless=True, quality=100, method=6, exact=True)
+        return buf.getvalue()
+
+    @staticmethod
+    def decode_webp(b):
+        from PIL import Image
+        with Image.open(io.BytesIO(b)) as im:
+            im.load()
+            return np.asarray(im.convert("RGB"))
+
+    @staticmethod
+    def gzip_bytes(raw):
+        buf = io.BytesIO()
+        with gzip.GzipFile(filename="", mode="wb", compresslevel=9, fileobj=buf, mtime=0) as g:
+            g.write(raw)
+        return buf.getvalue()
+
+    @staticmethod
+    def write_cube(out_root, rel_dir, stem, raw, parts, *, kind, vmin, vmax, stats, deposit):
+        if kind != "gas":
+            raise ValueError("compat write_cube supports kind='gas' only")
+        raw_sha = _sha(raw)
+        id12 = raw_sha[:12]
+        root = Path(out_root)
+        (root / rel_dir).mkdir(parents=True, exist_ok=True)
+        webp = {"paths": [], "bytes": [], "sha256": []}
+        for p, img in enumerate(parts):
+            b = img if isinstance(img, (bytes, bytearray)) else _Compat.encode_webp(img)
+            rel = f"{rel_dir}/{stem}.{id12}.p{p}.webp"
+            _atomic(root / rel, b)
+            webp["paths"].append(rel); webp["bytes"].append(len(b)); webp["sha256"].append(_sha(b))
+        gz = _Compat.gzip_bytes(raw)
+        rel = f"{rel_dir}/{stem}.{id12}.u8.gz"
+        _atomic(root / rel, gz)
+        return {"vmin": float(vmin), "vmax": float(vmax), "raw_bytes": len(raw), "raw_sha256": raw_sha,
+                "webp": webp, "gz": {"path": rel, "bytes": len(gz), "sha256": _sha(gz)},
+                "stats": dict(stats), "deposit": dict(deposit)}
+
+    @staticmethod
+    def column_from_u8(q3, vmin, vmax, half, p0, p1, spv=1.0, jitter=0.5):
+        """Viewer exact-path emulation (§5.5) on one level: step Δ/spv from p0, first sample at jitter·dt,
+        linear-space trilinear interpolation of 10^decode over 8 clamp-to-edge neighbours, q = 0 → 0."""
+        q = np.asarray(q3)
+        n = q.shape[0]
+        half = float(half)
+        dx = 2.0 * half / n
+        p0 = np.asarray(p0, dtype=np.float64); p1 = np.asarray(p1, dtype=np.float64)
+        L = float(np.linalg.norm(p1 - p0))
+        if L == 0:
+            return -np.inf
+        dt = dx / float(spv)
+        t = (np.arange(int(math.ceil(L / dt)) + 1) + float(jitter)) * dt
+        t = t[t < L]
+        pts = p0 + t[:, None] * ((p1 - p0) / L)
+        pts = pts[np.all(np.abs(pts) < half, axis=1)]
+        lin = np.where(q > 0, 10.0 ** (vmin + (q.astype(np.float64) - 1.0) * (vmax - vmin) / 254.0), 0.0)
+        g = (pts / (2.0 * half) + 0.5) * n - 0.5
+        i0 = np.floor(g).astype(np.int64)
+        fr = g - i0
+        tot = np.zeros(len(pts))
+        for dxo in (0, 1):
+            for dyo in (0, 1):
+                for dzo in (0, 1):
+                    ii = np.clip(i0 + np.array([dxo, dyo, dzo]), 0, n - 1)
+                    w = ((fr[:, 0] if dxo else 1 - fr[:, 0]) * (fr[:, 1] if dyo else 1 - fr[:, 1])
+                         * (fr[:, 2] if dzo else 1 - fr[:, 2]))
+                    tot += w * lin[ii[:, 0], ii[:, 1], ii[:, 2]]
+        s = float(tot.sum() * dt * CM_PER_KPC)
+        return math.log10(s) if s > 0 else -np.inf
+
+
+try:                                                            # CORE's shared implementation (D13)
+    from . import vizpack as _vizpack_mod                       # type: ignore[attr-defined]
+    VP = _vizpack_mod
+    VIZPACK_IMPL = getattr(_vizpack_mod, "GENERATOR", "tngsight.vizpack/1")
+except ImportError:                                             # not written yet: the pinned-formula twin
+    VP = _Compat
+    VIZPACK_IMPL = _Compat.GENERATOR
+
+
+# ============================================================================== small helpers
+def _sha(b) -> str:
+    return hashlib.sha256(b).hexdigest()
+
+
+def _atomic(path: Path, data: bytes) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + f".part{os.getpid()}")
+    tmp.write_bytes(data)
+    tmp.replace(path)
+
+
+def _half_kpc(level) -> float:
+    return float(GAS_LEVELS.get(level, ALL_GAS_LEVELS.get(level)))
+
+
+def _ordered_gas_levels() -> list:
+    return list(dict.fromkeys(list(GAS_LEVELS) + list(ALL_GAS_LEVELS)))
+
+
+def grid(level, n=N) -> D.Grid:
+    return D.Grid(_half_kpc(level), int(n))
+
+
+def level_mask(level, n=N):
+    """bool (n,n,n): True where the voxel may hold data (L0: centre r ≤ 400 kpc); None when unmasked."""
+    r = R_MASK_KPC.get(level)
+    return None if r is None else VP.radial_mask(int(n), _half_kpc(level), r)
+
+
+# ============================================================================== per-cell arrays
+def cell_arrays(ds) -> dict:
+    """Per-cell float64 arrays in slim-cutout order from a loaded `Generator` dataset (design §4.1)."""
+    ad = ds.all_data()
+    x_kpc = ad["PartType0", "Coordinates"].to("code_length").d.astype(np.float64) / TNG_H
+    m_g = ad["PartType0", "Masses"].to("g").d.astype(np.float64)
+    rho = ad["PartType0", "Density"].to("g/cm**3").d.astype(np.float64)
+    V_cm3 = m_g / rho
+    out = {"pos_disk": D.to_disk(x_kpc),
+           "h": 2.0 * (3.0 * V_cm3 / (4.0 * math.pi)) ** (1.0 / 3.0) / CM_PER_KPC,
+           "V_cm3": V_cm3,
+           "m": ad["PartType0", "Masses"].to("Msun").d.astype(np.float64)}
+    for k in DENSITY_KEYS + ("T", "Z"):
+        f = FIELDS[k]["yt_field"]
+        if k == "nH" and f not in ds.derived_field_list:          # older yt: no H_nuclei_density
+            f = ("gas", "H_number_density")
+        v = ad[f]
+        v = v.to(_YT_UNITS[k]) if _YT_UNITS[k] else v.to("dimensionless")
+        out[k] = np.asarray(v.d, dtype=np.float64) / (Z_SUN if k == "Z" else 1.0)
+    return out
+
+
+def check_order(cells_pos_disk, cutout) -> float:
+    """max |Δpos| (kpc) between the yt order and the h5py PartType0/Coordinates order of the cutout file."""
+    import h5py
+    with h5py.File(cutout, "r") as f:
+        x = f["PartType0"]["Coordinates"][:].astype(np.float64) / TNG_H
+    return float(np.max(np.abs(D.to_disk(x) - np.asarray(cells_pos_disk))))
+
+
+def cell_velocities(cutout, pos_disk=None) -> np.ndarray:
+    """Per-cell disk-frame velocity (N, 3) float64 km/s in h5py (= slim-cutout = yt) order:
+    v_disk = (PartType0/Velocities − SubhaloVel) @ Rᵀ (vel3d contract). Velocities are km/s·√a, a = 1 at z = 0
+    (asserted from Header/Time); no Hubble flow is added. With `pos_disk` (cached cell positions), the file's
+    Coordinates are checked to map onto it exactly, so the velocities line up with every other cell array."""
+    import h5py
+    with h5py.File(cutout, "r") as f:
+        a = float(f["Header"].attrs.get("Time", 1.0))
+        if abs(a - 1.0) > 1e-6:
+            raise ValueError(f"cell_velocities: snapshot a = {a}; the √a factor is only handled for a = 1")
+        if pos_disk is not None:
+            x = f["PartType0"]["Coordinates"][:].astype(np.float64) / TNG_H
+            d = float(np.max(np.abs(D.to_disk(x) - np.asarray(pos_disk))))
+            if d != 0.0:
+                raise RuntimeError(f"cell_velocities: cutout order differs from the cached cells (max|Δpos| {d} kpc)")
+        v = f["PartType0"]["Velocities"][:].astype(np.float64) * math.sqrt(a)
+    return to_disk_velocity(v)
+
+
+def to_disk_velocity(v_box_kms) -> np.ndarray:
+    """Box-axis peculiar velocity (N, 3) km/s → galaxy rest frame, disk axes: (v − SubhaloVel) @ Rᵀ."""
+    v = np.asarray(v_box_kms, dtype=np.float64)
+    return (v - np.asarray(GALAXY["SubhaloVel_kms"], dtype=np.float64)) @ D.disk_frame().T
+
+
+def save_cells(cells: dict, cache, names=CELL_NAMES) -> None:
+    cache = Path(cache); cache.mkdir(parents=True, exist_ok=True)
+    for k in names:
+        p = cache / f"cells_{k}.npy"
+        tmp = p.with_name(p.name + ".part.npy")
+        np.save(tmp, np.asarray(cells[k], dtype=np.float64)); tmp.replace(p)
+
+
+def load_cells(cache, names=CELL_NAMES):
+    """Cached per-cell arrays from a cache directory (or directly from a cutout HDF5 file path), or None when missing."""
+    cache = Path(cache)
+    if cache.is_file() and cache.suffix in (".hdf5", ".h5"):
+        import json
+        import tempfile
+        from . import config
+        from .generate import Generator
+        for rname in ("galaxy.json", "record.json"):
+            rp = cache.parent / rname
+            if rp.is_file():
+                rec = json.loads(rp.read_text())
+                if rec.get("subhalo_id") != GALAXY.get("subhalo_id"):
+                    GALAXY.clear()
+                    GALAXY.update(rec)
+                break
+        ion_dir = config.ion_table_dir()
+        if not ion_dir.is_dir():
+            alt_ion = Path(__file__).resolve().parents[3] / "data" / "trident"
+            if alt_ion.is_dir():
+                ion_dir = alt_ion
+        with tempfile.TemporaryDirectory(prefix="tngsight_cells_") as td:
+            idx = cache.parent / "cutout.ewah"
+            if not idx.is_file():
+                idx = Path(td) / "cutout.ewah"
+            g = Generator(cutout=cache, index_filename=idx, ion_table_dir=ion_dir, workdir=Path(td) / "work", fit_components=False)
+            g.load()
+            return cell_arrays(g.ds)
+    paths = {k: cache / f"cells_{k}.npy" for k in names}
+    if not all(p.is_file() for p in paths.values()):
+        return None
+    return {k: np.load(p) for k, p in paths.items()}
+
+
+def quantities_for(keys) -> tuple:
+    """The extensive quantities a set of fields needs, in ALL_QUANTITIES order. N_nH and m are always included
+    (the conservation checks use them)."""
+    need = {"N_nH", "m"}
+    for k in keys:
+        if k in ("T", "Z"):
+            need |= {"m", f"m{k}"}
+        elif k in VEL_KEYS:
+            need |= {"m", f"m{k}"}
+        else:
+            need.add(PRIMARY[k])
+    return tuple(q for q in ALL_QUANTITIES if q in need)
+
+
+def extensive(cells, quantities=QUANTITIES) -> dict:
+    """The extensive per-cell quantities deposited by one scatter (design §4.1): N_x = n_x·V, m, m·T, m·Z."""
+    V = np.asarray(cells["V_cm3"], dtype=np.float64)
+    m = np.asarray(cells["m"], dtype=np.float64)
+    out = {}
+    for q in quantities:
+        if q == "m":
+            out[q] = m
+        elif q in ("mT", "mZ"):
+            out[q] = m * cells[q[1:]]
+        elif q in VEL_QUANTITIES:                                # m·v_i, v_disk relative to SubhaloVel
+            out[q] = m * np.asarray(cells["vel_disk"], dtype=np.float64)[:, "xyz".index(q[2])]
+        else:
+            out[q] = cells[q[2:]] * V
+    return out
+
+
+# ============================================================================== deposition
+def level_cubes(dep, level) -> dict:
+    """Deposited totals -> the shipped fields present (float64 [i,j,k]): densities N/V_vox [cm⁻³], T = mT/m,
+    Z = mZ/m (0 where Σ m = 0); L0 voxel centres at r > 400 kpc → 0. Velocity components v_i = m·v_i / m
+    [km/s] are NaN where empty (Σ m = 0 or masked: 0 km/s is a valid value); when any is present the voxel
+    mass "m" [Msun] (0 where masked) is returned too (the mass weight of `vel_range`)."""
+    g = dep.grids
+    n = g["m"].shape[0]
+    dx = 2.0 * _half_kpc(level) / n
+    vvox = (dx * CM_PER_KPC) ** 3
+    out = {}
+    for k in DENSITY_KEYS:
+        if f"N_{k}" in g:
+            out[k] = g[f"N_{k}"] / vvox
+    m = g["m"]
+    pos = m > 0
+    for k, q in (("T", "mT"), ("Z", "mZ")):
+        if q not in g:
+            continue
+        a = np.zeros_like(m)
+        np.divide(g[q], m, out=a, where=pos)
+        out[k] = a
+    msk = level_mask(level, n)
+    if msk is not None:
+        for k in out:
+            out[k] = np.where(msk, out[k], 0.0)
+    keep = (pos if msk is None else pos & msk)
+    vel = {}
+    for k in VEL_KEYS:
+        if f"m{k}" in g:
+            a = np.full(m.shape, np.nan)
+            np.divide(g[f"m{k}"], m, out=a, where=keep)
+            vel[k] = a
+    if vel:
+        vel["m"] = np.where(keep, m, 0.0)
+    return {**{k: out[k] for k in VOL_KEYS if k in out}, **vel}
+
+
+def deposit_numbers(dep) -> dict:
+    """JSON-ready DepositResult numbers + conservation per quantity."""
+    cons = {}
+    for k, gq in dep.grids.items():
+        s = float(gq.sum())
+        cons[k] = abs(s - dep.q_in[k]) / max(abs(dep.q_in[k]), 1e-300)
+    lost = {k: dep.q_lost[k] / max(dep.q_in[k] + dep.q_lost[k], 1e-300) for k in dep.q_in}
+    return {"n_elements": dep.n_elements, "n_straddling": dep.n_straddling, "q_in": dep.q_in,
+            "q_full_inside": dep.q_full_inside, "q_lost": dep.q_lost, "lost_fraction": lost,
+            "conservation_rel": cons, "level_counts": dep.level_counts, "seconds": round(dep.seconds, 2),
+            "pairs": dep.meta.get("pairs"), "workers": dep.meta.get("workers"),
+            "deposit_generator": dep.meta.get("generator", D.GENERATOR)}
+
+
+def build_level(cells, level, workers=1, n=N, progress=None, keys=VOL_KEYS):
+    """ONE scatter of the extensive quantities the fields `keys` need on level `level` -> (cubes, DepositResult)."""
+    qn = quantities_for(keys)
+    q = extensive(cells, qn)
+    g = grid(level, n)
+    h = np.maximum(np.asarray(cells["h"], dtype=np.float64), GAS_H_MIN_VOX * g.dx)
+    dep = D.scatter(cells["pos_disk"], h, {k: q[k] for k in qn}, g,
+                    workers=int(workers), progress=progress)
+    return level_cubes(dep, level), dep
+
+
+# ============================================================================== column check reference (§4.3)
+# A level cube holds the field smoothed to h_eff = max(h, GAS_H_MIN_VOX·Δ) and is read back by a trilinear march,
+# i.e. averaged over about one voxel across the beam. Its column is therefore checked against that same field: the
+# SPH line integral with h_eff, averaged over a 3×3 bundle of parallel rays offset by (−Δ/2, 0, +Δ/2) across the
+# beam. A single thin ray through the unsmoothed cells is not the cube's field: it misses or hits sub-voxel clumps
+# (Si IV, C IV, N V differ by −0.2 to +0.6 dex at L0/L1 although the deposit is right), so build_volumes reports that
+# difference and never gates on it. SMOOTH_TOL: the Phase-3 cubes reach at most 0.046 dex against this reference.
+SMOOTH_TOL = 0.05
+BUNDLE_OFFSETS = (-0.5, 0.0, 0.5)                # in units of the level voxel Δ
+
+
+def _beam_basis(u):
+    e1 = np.cross(u, [0.0, 0.0, 1.0])
+    if np.linalg.norm(e1) < 1e-6:
+        e1 = np.cross(u, [0.0, 1.0, 0.0])
+    e1 = e1 / np.linalg.norm(e1)
+    return e1, np.cross(u, e1)
+
+
+def smoothed_columns(pos, h, qs: dict, p0, p1, dx, h_min_vox=GAS_H_MIN_VOX, offsets=BUNDLE_OFFSETS) -> dict:
+    """{name: bundle mean of ∫ W(r, h_eff) q ds} [q·kpc⁻²] along [p0, p1] for every per-cell extensive q in `qs`,
+    with h_eff = max(h, h_min_vox·dx) and the len(offsets)² parallel rays p + (s·e1 + t·e2)·dx: the column the level
+    cube of voxel dx must reproduce (to SMOOTH_TOL). Cells that cannot touch any bundle ray are dropped first, so a
+    call costs one cylinder selection plus len(offsets)² line integrals per quantity on the cells near the beam."""
+    pos = np.asarray(pos, dtype=np.float64).reshape(-1, 3)
+    p0, p1 = np.asarray(p0, dtype=np.float64), np.asarray(p1, dtype=np.float64)
+    L = float(np.linalg.norm(p1 - p0))
+    if L == 0.0:
+        return {k: 0.0 for k in qs}
+    u = (p1 - p0) / L
+    dx = float(dx)
+    heff = np.maximum(np.asarray(h, dtype=np.float64).reshape(-1), float(h_min_vox) * dx)
+    reach = heff + dx * max(abs(float(o)) for o in offsets) * math.sqrt(2.0)
+    d = pos - p0
+    t = d @ u
+    b2 = np.maximum(np.einsum("ij,ij->i", d, d) - t * t, 0.0)
+    near = (b2 < reach * reach) & (t > -reach) & (t < L + reach)
+    P, H = pos[near], heff[near]
+    Q = {k: np.asarray(q, dtype=np.float64).reshape(-1)[near] for k, q in qs.items()}
+    e1, e2 = _beam_basis(u)
+    shifts = [(float(s) * dx) * e1 + (float(r) * dx) * e2 for s in offsets for r in offsets]
+    out = {k: 0.0 for k in qs}
+    for sh in shifts:
+        for k in qs:
+            out[k] += D.line_integral(P, H, Q[k], p0 + sh, p1 + sh)
+    return {k: v / len(shifts) for k, v in out.items()}
+
+
+# ============================================================================== ranges and windows (§2.3, §3.5)
+def field_range(cubes_by_level: dict, key) -> tuple:
+    """Shared (vmin, vmax) of `key` over the given levels (§2.3 gas rule; L0 masked)."""
+    levels = [L for L in _ordered_gas_levels() if L in cubes_by_level]
+    vals = [cubes_by_level[L][key] for L in levels]
+    masks = [level_mask(L, vals[i].shape[0]) for i, L in enumerate(levels)]
+    return tuple(float(x) for x in VP.gas_range(vals, masks))
+
+
+def column_maps(density, level) -> dict:
+    """log10 column maps [cm⁻²] of a density cube: face-on (sum over k) and edge-on (sum over i); NaN where 0."""
+    n = density.shape[0]
+    dcm = 2.0 * _half_kpc(level) / n * CM_PER_KPC
+    out = {}
+    for name, ax in (("face", 2), ("edge", 0)):
+        s = np.asarray(density, dtype=np.float64).sum(axis=ax) * dcm
+        with np.errstate(divide="ignore"):
+            out[name] = np.where(s > 0, np.log10(np.where(s > 0, s, 1.0)), np.nan)
+    return out
+
+
+def weighted_maps(X, nH) -> dict:
+    """log10 of the nH-weighted mean of X along k (face) and i (edge); NaN where Σ nH = 0 or the mean ≤ 0."""
+    out = {}
+    for name, ax in (("face", 2), ("edge", 0)):
+        num = (np.asarray(nH, np.float64) * X).sum(axis=ax)
+        den = np.asarray(nH, np.float64).sum(axis=ax)
+        ok = (den > 0) & (num > 0)
+        r = np.full(den.shape, np.nan)
+        r[ok] = np.log10(num[ok] / den[ok])
+        out[name] = r
+    return out
+
+
+def _finite(a):
+    a = np.asarray(a, dtype=np.float64)
+    return a[np.isfinite(a)]
+
+
+def proj_window(cubes_by_level: dict, key, r200=None) -> dict:
+    """`proj` block of field `key` (§3.5). Column fields need L0 (vmin) and any levels (vmax); T/Z use the
+    union of the L0 and L1 maps (whichever are given)."""
+    r200 = float(GALAXY["R200c_kpc"] if r200 is None else r200)
+    levels = [L for L in _ordered_gas_levels() if L in cubes_by_level]
+    if FIELDS[key]["kind"] == "density":
+        maps = {L: column_maps(cubes_by_level[L][key], L) for L in levels}
+        p999 = [float(np.percentile(_finite(mp[v]), 99.9)) for mp in maps.values() for v in ("face", "edge")
+                if _finite(mp[v]).size]
+        base = "L0" if "L0" in maps else levels[0]
+        face = maps[base]["face"]
+        n = face.shape[0]
+        c = VP.voxel_centers(n, _half_kpc(base))
+        rr = np.hypot(c[:, None], c[None, :])
+        sel = _finite(face[rr < r200])
+        p2, p50 = float(np.percentile(sel, 2)), float(np.percentile(sel, 50))
+        pmin, pmax = VP.snap_down(max(p2, p50 - 3.0)), VP.snap_up(max(p999))
+        if pmax <= pmin:
+            pmax = round(pmin + 0.1, 1)
+        return {"kind": "column", "units": "cm^-2", "vmin": pmin, "vmax": pmax}
+    pool = []
+    for L in [L for L in ("L0", "L1") if L in cubes_by_level] or levels[:1]:
+        mp = weighted_maps(cubes_by_level[L][key], cubes_by_level[L]["nH"])
+        pool += [_finite(mp["face"]), _finite(mp["edge"])]
+    u = np.concatenate(pool)
+    pmin, pmax = VP.snap_down(float(np.percentile(u, 2))), VP.snap_up(float(np.percentile(u, 99.9)))
+    if pmax <= pmin:
+        pmax = round(pmin + 0.1, 1)
+    return {"kind": "weighted_mean", "weight": "nH", "units": FIELDS[key]["units"],
+            "vmin": pmin, "vmax": pmax}
+
+
+def vol_window(cubes_by_level: dict, key, vmax) -> list:
+    """[snap_down(p50 of the L1 valid voxels), vmax] (§3.5); falls back to the finest level given."""
+    # L1 first, then the other built levels finest-first: a gas-poor halo can have no positive voxel of an ion in
+    # the whole L1 box (613192, run3) while another level has some; with none anywhere the narrow window is used
+    order = (["L1"] if "L1" in cubes_by_level else []) + \
+        [x for x in reversed(_ordered_gas_levels()) if x in cubes_by_level and x != "L1"]
+    lo = None
+    for L in order:
+        v = np.asarray(cubes_by_level[L][key], dtype=np.float64)
+        msk = level_mask(L, v.shape[0])
+        ok = np.isfinite(v) & (v > 0) & (True if msk is None else msk)
+        if ok.any():
+            lo = VP.snap_down(float(np.percentile(np.log10(v[ok]), 50)))
+            break
+    return [lo, float(vmax)] if lo is not None and lo < vmax else [round(vmax - 0.1, 1), float(vmax)]
+
+
+EMPTY_LOG = -99.0          # stats percentiles of a cube with no positive voxel (JSON has no NaN; manifest needs numbers)
+
+
+def cube_stats(values, q) -> dict:
+    v = np.asarray(values, dtype=np.float64)
+    ok = np.asarray(q) > 0
+    # percentiles over the voxels with a positive value: a voxel with gas but zero ion density gave log10(0) = -inf
+    # and NaN percentiles, and a cube with no positive voxel is legitimate (gas-poor halo: no Mg II in the whole L2
+    # box of 447914, run3), so it gets the finite EMPTY_LOG sentinel
+    pos = ok & np.isfinite(v) & (v > 0)
+    lv = np.log10(v[pos]) if pos.any() else np.array([EMPTY_LOG])
+    return {"frac_empty": round(float(1.0 - ok.mean()), 6),
+            "p01": round(float(np.percentile(lv, 1)), 4), "p50": round(float(np.percentile(lv, 50)), 4),
+            "p99": round(float(np.percentile(lv, 99)), 4), "max": round(float(np.max(lv)), 4)}
+
+
+def vel_V(cubes_by_level: dict) -> float:
+    """Shared V [km/s] of vx, vy, vz (vel3d contract): mass-weighted 99.9th percentile of |v_i| over the non-empty
+    L0 voxels (pooled over the three components), rounded up to a multiple of 50 km/s. Falls back to the coarsest
+    level given when L0 is not built."""
+    L = "L0" if "L0" in cubes_by_level else [x for x in _ordered_gas_levels() if x in cubes_by_level][0]
+    c = cubes_by_level[L]
+    return float(VP.vel_range([c[k] for k in VEL_KEYS], c["m"]))
+
+
+def vel_stats(values, q, m=None) -> dict:
+    """Per-cube numbers of a velocity component [km/s]: the stats keys every CUBE carries (frac_empty, p01, p50,
+    p99, max of v over non-empty voxels) plus the mass-weighted mean and the fraction clipped at ±V."""
+    v = np.asarray(values, dtype=np.float64)
+    ok = np.asarray(q) > 0
+    x = v[ok] if ok.any() else np.array([0.0])
+    out = {"frac_empty": round(float(1.0 - ok.mean()), 6),
+           "p01": round(float(np.percentile(x, 1)), 3), "p50": round(float(np.percentile(x, 50)), 3),
+           "p99": round(float(np.percentile(x, 99)), 3), "max": round(float(np.max(x)), 3),
+           "min": round(float(np.min(x)), 3),
+           "frac_clipped": round(float(np.mean((np.asarray(q)[ok] == 1) | (np.asarray(q)[ok] == 255)))
+                                 if ok.any() else 0.0, 6)}
+    if m is not None:
+        w = np.asarray(m, dtype=np.float64)[ok]
+        out["mean_mass_weighted"] = round(float((w * x).sum() / w.sum()), 4) if ok.any() and w.sum() > 0 else 0.0
+    return out
+
+
+def vel_field_entry(key, V, cubes: dict) -> dict:
+    f = FIELDS[key]
+    return {"label": f["label"], "units": f["units"], "kind": f["kind"], "encoding": f["encoding"],
+            "component": f["component"], "vmin": -float(V), "vmax": float(V), "cmap": f["cmap"],
+            "source": SOURCES[key], "frame": VEL_FRAME, "cubes": dict(cubes)}
+
+
+def vectors_block(fields: dict):
+    """gas.vectors = {"v": {...}} when vx, vy, vz are all present (else None)."""
+    if not all(k in fields for k in VEL_KEYS):
+        return None
+    return {"v": {"components": list(VEL_KEYS), "units": "km/s", "frame": VEL_FRAME,
+                  "V": float(fields["vx"]["vmax"])}}
+
+
+def check_expected_range(key, vmin, vmax) -> list:
+    """Problems with (vmin, vmax) against design §3.4 (empty list = inside the bounds)."""
+    if key not in EXPECTED_RANGE:
+        return []
+    (e0, t0), (e1, t1) = EXPECTED_RANGE[key]
+    bad = []
+    if abs(vmin - e0) > t0 + 1e-9:
+        bad.append(f"{key}: vmin {vmin} outside {e0} ± {t0}")
+    if abs(vmax - e1) > t1 + 1e-9:
+        bad.append(f"{key}: vmax {vmax} outside {e1} ± {t1}")
+    return bad
+
+
+# ============================================================================== cube files + manifest fragment
+def encode_cube_job(args) -> dict:
+    """Process-pool job: (out_root, level, key, q uint8 (n,n,n), vmin, vmax, stats, deposit) -> CUBE entry."""
+    out_root, level, key, q, vmin, vmax, stats, dep = args
+    raw = VP.raw_gas(q)
+    parts = [VP.encode_webp(a) for a in VP.atlas_parts(q)]
+    cube = VP.write_cube(out_root, f"gas/{level}", key, raw, parts, kind="gas", vmin=vmin, vmax=vmax,
+                         stats=stats, deposit=dep)
+    # decode check: the written WebP parts must reproduce the raw bytes exactly (§2.4)
+    dec =[VP.decode_webp((Path(out_root) / p).read_bytes()) for p in cube["webp"]["paths"]]
+    if _sha(VP.atlas_to_raw(dec, q.shape[0], 1)) != cube["raw_sha256"]:
+        raise RuntimeError(f"{level}/{key}: decoded WebP does not reproduce the raw bytes")
+    return cube
+
+
+def cube_files_ok(out_root, cube) -> bool:
+    """True when every file of a CUBE entry exists with the recorded size and sha256."""
+    root = Path(out_root)
+    try:
+        items = list(zip(cube["webp"]["paths"], cube["webp"]["bytes"], cube["webp"]["sha256"]))
+        items.append((cube["gz"]["path"], cube["gz"]["bytes"], cube["gz"]["sha256"]))
+        for rel, nb, sh in items:
+            p = root / rel
+            if not p.is_file() or p.stat().st_size != nb or _sha(p.read_bytes()) != sh:
+                return False
+        return True
+    except (KeyError, TypeError):
+        return False
+
+
+def levels_block(levels=tuple(GAS_LEVELS), n=N) -> dict:
+    return {L: {"half_kpc": _half_kpc(L), "n": int(n), "voxel_kpc": 2.0 * _half_kpc(L) / n,
+                "r_mask_kpc": R_MASK_KPC.get(L)} for L in levels}
+
+
+def generator_block() -> dict:
+    import PIL
+    import PIL.features
+    return {"deposit": D.GENERATOR, "vizpack": VIZPACK_IMPL, "gas": GENERATOR, "pillow": PIL.__version__,
+            "libwebp": PIL.features.version("webp"), "numpy": np.__version__}
+
+
+def field_entry(key, vmin, vmax, proj, vwin, cubes: dict) -> dict:
+    f = FIELDS[key]
+    return {"label": f["label"], "units": f["units"], "kind": f["kind"], "source": SOURCES[key],
+            "vmin": float(vmin), "vmax": float(vmax), "cmap": f["cmap"], "proj": dict(proj),
+            "vol_window": [float(vwin[0]), float(vwin[1])], "cubes": dict(cubes)}
+
+
+def gas_fragment(fields: dict, levels=tuple(GAS_LEVELS), n=N) -> dict:
+    """`gas/manifest_gas.json` = {"schema", "generator", "levels" (L*), "gas"} (design §3.3)."""
+    order = [k for k in ALL_KEYS if k in fields]
+    gas = {"levels": list(levels), "fields": {k: fields[k] for k in order}}
+    vec = vectors_block(fields)
+    if vec is not None:
+        gas["vectors"] = vec
+    return {"schema": "tng50-viz/2", "generator": generator_block(), "levels": levels_block(levels, n), "gas": gas}
+
+
+_HEX64 = re.compile(r"^[0-9a-f]{64}$")
+
+
+def validate_gas_fragment(frag, base_dir=None) -> None:
+    """U_gas's own structural check of the gas fragment (§3.3 keys/types, CUBE rules, file names §2.6);
+    with base_dir, every file's size + sha256. Raises ValueError."""
+    def need(c, msg):
+        if not c:
+            raise ValueError(f"manifest_gas: {msg}")
+    need(isinstance(frag, dict) and frag.get("schema") == "tng50-viz/2", "schema")
+    for k in ("generator", "levels", "gas"):
+        need(k in frag, f"missing {k!r}")
+    gas = frag["gas"]
+    need(set(gas["levels"]) <= set(_ordered_gas_levels()) and gas["levels"], "gas.levels")
+    for L in gas["levels"]:
+        lv = frag["levels"].get(L)
+        need(isinstance(lv, dict) and isinstance(lv.get("half_kpc"), (int, float)) and lv["half_kpc"] > 0, f"levels.{L}")
+        need(abs(lv["voxel_kpc"] - 2 * lv["half_kpc"] / lv["n"]) < 1e-9 * lv["half_kpc"], f"levels.{L}.voxel_kpc")
+        need(lv["r_mask_kpc"] is None or (isinstance(lv["r_mask_kpc"], (int, float)) and lv["r_mask_kpc"] > 0), f"levels.{L}.r_mask_kpc")
+    need(isinstance(gas["fields"], dict) and gas["fields"], "gas.fields empty")
+    for key, e in gas["fields"].items():
+        need(key in ALL_KEYS, f"unknown field {key!r}")
+        vel = key in VEL_KEYS
+        for k in ("label", "units", "kind", "source", "vmin", "vmax", "cmap", "cubes") + (
+                ("encoding", "component", "frame") if vel else ("proj", "vol_window")):
+            need(k in e, f"{key}: missing {k!r}")
+        need(all(isinstance(e[k], (int, float)) and math.isfinite(e[k]) for k in ("vmin", "vmax"))
+             and e["vmin"] < e["vmax"], f"{key}: vmin/vmax")
+        if vel:
+            need(e["kind"] == "velocity" and e["encoding"] == "linear" and e["vmin"] == -e["vmax"]
+                 and e["component"] == FIELDS[key]["component"] and "proj" not in e and "vol_window" not in e,
+                 f"{key}: velocity entry")
+        else:
+            pr = e["proj"]
+            need(pr.get("kind") == ("column" if e["kind"] == "density" else "weighted_mean"), f"{key}: proj.kind")
+            need(pr["vmin"] < pr["vmax"], f"{key}: proj window")
+            w = e["vol_window"]
+            need(len(w) == 2 and w[0] < w[1] and w[1] == e["vmax"], f"{key}: vol_window")
+        need(set(e["cubes"]) == set(gas["levels"]), f"{key}: cubes {sorted(e['cubes'])}")
+        for L, c in e["cubes"].items():
+            n = frag["levels"][L]["n"]
+            need(c["vmin"] == e["vmin"] and c["vmax"] == e["vmax"], f"{key}/{L}: cube range != field range")
+            need(c["raw_bytes"] == n ** 3 and bool(_HEX64.match(c["raw_sha256"])), f"{key}/{L}: raw")
+            id12 = c["raw_sha256"][:12]
+            need(c["webp"]["paths"] == [f"gas/{L}/{key}.{id12}.p{p}.webp" for p in range(4)],
+                 f"{key}/{L}: webp paths")
+            need(c["gz"]["path"] == f"gas/{L}/{key}.{id12}.u8.gz", f"{key}/{L}: gz path")
+            need(len(c["webp"]["bytes"]) == 4 and len(c["webp"]["sha256"]) == 4, f"{key}/{L}: webp lists")
+            need(all(k in c["stats"] for k in ("frac_empty", "p01", "p50", "p99", "max")), f"{key}/{L}: stats")
+            need(all(k in c["deposit"] for k in ("n_elements", "n_straddling", "lost_fraction", "seconds",
+                                                 "workers")), f"{key}/{L}: deposit")
+            if base_dir is not None:
+                need(cube_files_ok(base_dir, c), f"{key}/{L}: file size/sha256 mismatch or missing")
+    if "vectors" in gas:
+        for name, vec in gas["vectors"].items():
+            need(all(c in gas["fields"] and gas["fields"][c]["kind"] == "velocity" for c in vec["components"])
+                 and all(gas["fields"][c]["vmax"] == vec["V"] for c in vec["components"]), f"vectors.{name}")
+
+
+def write_fragment(viz_dir, frag) -> Path:
+    p = Path(viz_dir) / "gas" / "manifest_gas.json"
+    _atomic(p, (json.dumps(frag, indent=1) + "\n").encode())
+    return p
+
+
+def merged_for_validation(frag) -> dict:
+    """A temporary full manifest_v2 object around the gas fragment (only for vizpack.validate_manifest_v2 with
+    sections=("gas",); the real viz/manifest_v2.json is written by `vizpack merge` at integration)."""
+    man = {"schema": "tng50-viz/2", "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+           "generator": frag["generator"], "levels": frag["levels"], "gas": frag["gas"]}
+    if hasattr(VP, "constant_blocks"):
+        man.update(VP.constant_blocks())
+    return man
