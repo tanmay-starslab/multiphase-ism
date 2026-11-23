@@ -5,19 +5,19 @@
 // Rendering is in spectra.js, the instrument sliders in instrument.js, the sightline picker in gallery.js and the
 // pure state (hash, slider maps, validation) in state.js.
 import {makeRegistry, cloneState, casesFor, bandsOf, clampView, parseHash, formatHash, instrumentPatch, ID_RE, LAYOUTS,
-  fmtR, fmtNum, minus, nf, annotateLimits, fitClass, fitLimits} from "./state.js";
-import {createSpectra} from "./spectra.js";
-import {createGallery, kindOf, nShow, sightLabel, sightTip, copyText} from "./gallery.js";
-import {createInstrument} from "./instrument.js";
-import * as FITM from "./fit.js";
-import {initTips, ION_TIPS} from "./tips.js";
-import {initFeatures} from "./features.js";   /* ux4 features: share, keys, random, undo, solo, CSV, loading */
-import {initLiquidTabs, initLiquidSeg, initLiquidButtons} from "./liquidtabs.js";   /* CSS-only liquid drop (tabs, segmented rows) and glossy top-bar buttons */
-import {initLiquidBg} from "./liquidbg.js";   /* liquid metal shader background (3D tab; Spectra only with SPECTRA_BG) */
-import {uiSound, sfx} from "./uisound.js";   /* optional UI sound effects (off by default; top-bar switch #sfx) */
+  fmtR, fmtNum, minus, nf, annotateLimits, fitClass, fitLimits} from "./state.js?v=20261123c";
+import {createSpectra} from "./spectra.js?v=20261123c";
+import {createGallery, kindOf, nShow, sightLabel, sightTip, copyText} from "./gallery.js?v=20261123c";
+import {createInstrument} from "./instrument.js?v=20261123c";
+import * as FITM from "./fit.js?v=20261123c";
+import {initTips, ION_TIPS} from "./tips.js?v=20261123c";
+import {initFeatures} from "./features.js?v=20261123c";   /* ux4 features: share, keys, random, undo, solo, CSV, loading */
+import {initLiquidTabs, initLiquidSeg, initLiquidButtons} from "./liquidtabs.js?v=20261123c";   /* CSS-only liquid drop (tabs, segmented rows) and glossy top-bar buttons */
+import {initLiquidBg} from "./liquidbg.js?v=20261123c";   /* liquid metal shader background (3D tab; Spectra only with SPECTRA_BG) */
+import {uiSound, sfx} from "./uisound.js?v=20261123c";   /* optional UI sound effects (off by default; top-bar switch #sfx) */
 import {galaxyIndex, resolveGalaxy, parseGalaxy, galaxyHashPart, packFor, createGalaxyPicker, galaxyTip, unlistedGalaxy,
-  nearestSightline, defaultSightline, srcOf, galaxySummary, normId, isFire, inferSim, inferSimKey, SIM_META, SIM_ORDER, galNoun, galShortLabel} from "./galaxies.js";
-import {tier, tierReady} from "./tier.js";   /* perf R5: device tier (html[data-tier]) and its one-off WebGL probe */
+  nearestSightline, defaultSightline, srcOf, galaxySummary, normId, isFire, inferSim, inferSimKey, SIM_META, SIM_ORDER, galNoun, galShortLabel} from "./galaxies.js?v=20261123c";
+import {tier, tierReady} from "./tier.js?v=20261123c";   /* perf R5: device tier (html[data-tier]) and its one-off WebGL probe */
 const {degradeV, decodeTNGS, seedFor, cacheKey, fitPanel, FIT_VERSION, FIT_PARAMS} = FITM;
 
 /* ---------------- config ---------------- */
@@ -25,7 +25,7 @@ const CFG = Object.assign({
   version: 3, catalog_url: "data/catalog.json", bin_dir: "data/s/", backends: ["http://127.0.0.1:8787"],
   galaxy: {sim: "TNG50-1", snapshot: 99, redshift: 0, subhalo_id: 488530}, ions: [], bands: {}, snr: {min: 2, max: 100, default: 10, pair: [20, 5]},
   defaults: {id: "edge_b100_a090"}, viz: null, components_url: "data/components.json", three: "0.169.0", js_base: "js/",
-  chat: {enabled: false}, custom: {r_max_kpc: 395, l_min_kpc: 20, l_max_kpc: 800}, fitter: {worker: "js/fitworker.js", version: "fit/1"}
+  chat: {enabled: false}, custom: {r_max_kpc: 395, l_min_kpc: 20, l_max_kpc: 800}, fitter: {worker: "js/fitworker.js?v=20261123c", version: "fit/1"}
 }, window.TNG_DATA || {});
 const reg = makeRegistry(CFG), {ION} = reg;
 /* galaxy sample (js/galaxies.js): GIX is the picker index (null with one galaxy: no picker, nothing changes), GAL the

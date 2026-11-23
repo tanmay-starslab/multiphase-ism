@@ -4,7 +4,7 @@
 import {
   initFastVizWasm, wasmReady, wasm_cast_cube_ray, wasm_synthesize_voigt_12ions,
   wasm_decode_lut_volume, wasm_pack_velocity
-} from "./fast_viz_wasm.js";
+} from "./fast_viz_wasm.js?v=20261123c";
 export {initFastVizWasm, wasm_cast_cube_ray, wasm_synthesize_voigt_12ions, wasm_decode_lut_volume};
 export const SCHEMA = "tng50-viz/2";
 /* Phase 3: the gas fields are nH, T, Z plus the 12 registry ions in ladder order (tngsight.vizpack.VOL_KEYS) */

@@ -15,10 +15,10 @@
 // click starts Tilt. A small guide card on the stage lists the gestures for 6 s; the pill's "?" brings it back.
 // The camera stops on Stop, Esc, leaving the 3D tab, a hidden page, a viewer dispose, or a minute with nobody seen.
 // Anything else that moves the camera (a drag, a preset, the orbit button) re-bases the control so it never fights it.
-import {poseFromMatrix, oneEuro, orbitMap, windowMap, offAxis, tiltPose, stepToward, D2R} from "./headmath.js";
-import {handController, arbiter, pickJob, decideQuick, governor} from "./handmath.js";
-import {gpuLite} from "./liquidbg.js";
-import {tier} from "./tier.js";
+import {poseFromMatrix, oneEuro, orbitMap, windowMap, offAxis, tiltPose, stepToward, D2R} from "./headmath.js?v=20261123c";
+import {handController, arbiter, pickJob, decideQuick, governor} from "./handmath.js?v=20261123c";
+import {gpuLite} from "./liquidbg.js?v=20261123c";
+import {tier} from "./tier.js?v=20261123c";
 
 export const isTilt = () => matchMedia("(pointer: coarse)").matches && !matchMedia("(any-pointer: fine)").matches;
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;

@@ -19,7 +19,7 @@
 //   - ?bg=off creates nothing.
 // Debug: window.__liquidBg[name].state() -> {mode, running, paused, fps, frames, theme, w, h, scale}.
 
-import {tier, tierReady} from "./tier.js";
+import {tier, tierReady} from "./tier.js?v=20261123c";
 
 const MAX_FPS = 30, SCALE = 0.5, SPEED = 0.72, STATIC_T = 23.0, SLOW_MS = 20;
 

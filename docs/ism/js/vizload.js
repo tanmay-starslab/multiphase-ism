@@ -7,7 +7,7 @@
    only after their sha256 checked out, a cached copy that fails the check is deleted and refetched once (FE-03), and
    cache.put no longer delays the first display (FE-04); the atlas decode, atlasToRaw and the hash run in a worker when
    one can be started (FE-10); a fallback base that answers 404 for everything is not tried again (FE-15) */
-import {atlasToRaw, cubeRef, cubeUrls, gunzipIfNeeded, sha256Hex, packVelocity} from "./vizdata.js";
+import {atlasToRaw, cubeRef, cubeUrls, gunzipIfNeeded, sha256Hex, packVelocity} from "./vizdata.js?v=20261123c";
 
 const CACHE = "tng50-viz-v3";
 export const STALL_MS = 20000;

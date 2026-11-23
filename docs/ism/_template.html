@@ -26,7 +26,7 @@
 <link rel="preload" href="fonts/space-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="css/tokens.css">
-<link rel="stylesheet" href="css/page.css">
+<link rel="stylesheet" href="css/page.css?v=20261123c">
 <style>/* Entry to "How an absorption spectrum is made" (explainer v2, U_entry): a beam-coloured call to action in the spectra panel header,
    on the row under Lines, with a dismissible hint beside it, just above the first spectrum (the Lines row has about
    130 px free at 1440 px with the default five lines, too little for the pill). First visit (review2 beauty M4): from 640 px
@@ -118,7 +118,7 @@ body:has(>#chat-open.fab:not([hidden])) #bar{padding-right:104px}
 })(window);
 </script>
 <!-- perf R5: js/app.js and its static imports, fetched in parallel (after the import map; tests/js/ui_static.mjs keeps the list) -->
-<link rel="modulepreload" href="js/app.js"><link rel="modulepreload" href="js/state.js"><link rel="modulepreload" href="js/spectra.js"><link rel="modulepreload" href="js/gallery.js"><link rel="modulepreload" href="js/instrument.js"><link rel="modulepreload" href="js/fit.js"><link rel="modulepreload" href="js/tips.js"><link rel="modulepreload" href="js/features.js"><link rel="modulepreload" href="js/liquidtabs.js"><link rel="modulepreload" href="js/liquidbg.js"><link rel="modulepreload" href="js/uisound.js"><link rel="modulepreload" href="js/galaxies.js"><link rel="modulepreload" href="js/tier.js">
+<link rel="modulepreload" href="js/app.js?v=20261123c"><link rel="modulepreload" href="js/state.js?v=20261123c"><link rel="modulepreload" href="js/spectra.js?v=20261123c"><link rel="modulepreload" href="js/gallery.js?v=20261123c"><link rel="modulepreload" href="js/instrument.js?v=20261123c"><link rel="modulepreload" href="js/fit.js?v=20261123c"><link rel="modulepreload" href="js/tips.js?v=20261123c"><link rel="modulepreload" href="js/features.js?v=20261123c"><link rel="modulepreload" href="js/liquidtabs.js?v=20261123c"><link rel="modulepreload" href="js/liquidbg.js?v=20261123c"><link rel="modulepreload" href="js/uisound.js?v=20261123c"><link rel="modulepreload" href="js/galaxies.js?v=20261123c"><link rel="modulepreload" href="js/tier.js?v=20261123c">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Seeing the Interstellar Medium & Multiphase Mixing Layers","url":"https://ism.tanmaysingh.uk/","applicationCategory":"EducationalApplication","operatingSystem":"Any (web browser)","description":"Explore 12-ion UV/EUV/X-ray absorption spectra and 3D WebGL2 radiative-transfer volumes across multiphase interstellar medium patches and sub-parsec radiative turbulent mixing layers, with a universal Bring-Your-Own-Simulation CLI.","author":{"@type":"Person","name":"Tanmay Singh","url":"https://tanmaysingh.uk/"},"isAccessibleForFree":true,"codeRepository":"https://github.com/tanmay-starslab/ism-absorber-explorer"}</script>
 </head>
 <body data-tab="spectra">
@@ -297,6 +297,6 @@ window.TNG_DATA = DATA;
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", all); else all();
 })();
 </script>
-<script type="module" src="js/app.js"></script>
+<script type="module" src="js/app.js?v=20261123c"></script>
 </body>
 </html>

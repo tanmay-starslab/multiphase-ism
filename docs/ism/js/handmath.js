@@ -4,7 +4,7 @@
 //
 // Landmarks are MediaPipe's normalised image coordinates (x to the image right, y down) of the unmirrored camera frame,
 // so the person's right is the image's left. Everything here works in the person's frame: ux = 1 - x, y down.
-import {oneEuro, deadGain} from "./headmath.js";
+import {oneEuro, deadGain} from "./headmath.js?v=20261123c";
 
 /** MediaPipe's canned gesture categories -> the labels used here (anything else, "None" included, is "none"). */
 export const LABELS = {Open_Palm: "palm", Closed_Fist: "fist", Thumb_Up: "thumb", Victory: "victory", Pointing_Up: "point"};
