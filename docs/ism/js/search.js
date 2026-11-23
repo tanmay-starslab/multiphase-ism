@@ -4,8 +4,8 @@
 // Lower limits (owner decision 2): a NOERR, or SAT but not DAMPED, component is a lower limit at col = min(logN,
 // logN_lo) (state.js; the page annotates every catalogue it loads). It meets logN_min when col does, and logN_max only
 // when logN_max is absent or at the ion's ceiling; score and reason use col and the reason counts the limits.
-import {isLowerLimit, columnOf} from "./state.js";
-import {sfx} from "./uisound.js";
+import {isLowerLimit, columnOf} from "./state.js?v=20261123c";
+import {sfx} from "./uisound.js?v=20261123c";
 /* Generated from tngsight/ions.json and tngsight.search.QUERY_SCHEMA by `python -m server.make_chat_tools`.
    Do not edit between the markers. */
 /*__GEN:QUERY__*/
