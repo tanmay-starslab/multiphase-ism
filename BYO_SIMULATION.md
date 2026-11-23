@@ -1,6 +1,6 @@
 # Bring-Your-Own-Simulation (`python -m tngsight.ingest`) Guide
 
-`ism-absorber-requirements` includes a universal one-command ingestion pipeline (`tngsight.ingest`) that converts any 3D astrophysical hydro/MHD simulation snapshot, cutout, or uniform grid into a self-contained static 3D WebGL2 + 12-ion Voigt absorption sightline web pack (`tng50-viz/2` + `TNGS` v2).
+`multiphase-ism` includes a universal one-command ingestion pipeline (`tngsight.ingest`) that converts any 3D astrophysical hydro/MHD simulation snapshot, cutout, or uniform grid into a self-contained static 3D WebGL2 + 12-ion Voigt absorption sightline web pack (`tng50-viz/2` + `TNGS` v2).
 
 Because the entire explorer runs client-side in the browser (WebGL2 3D radiative transfer + 60 fps 1D/2D transfer functions + Web Worker Levenberg–Marquardt Voigt fitter), researchers working with **private or non-public simulations** (such as **FIREbox**, **GIBLE**, **GLOW**, **TIGRESS**, **SILCC**, **STARFORGE**, or custom **Athena++ / Enzo / RAMSES / AREPO / GIZMO** runs) can visualize and fit their own volumes locally on their laptop or workstation without uploading proprietary simulation snapshots to any external server.
 
