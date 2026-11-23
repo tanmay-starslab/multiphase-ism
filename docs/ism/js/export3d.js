@@ -7,9 +7,9 @@
 //     galaxy/simulation stamp, and wrapped Computer Modern caption block below the figure
 //   - Exact 8-frame sub-pixel accumulated high-DPI render (default 400 dpi at 7.1 in double-column width)
 //   - Zero-dependency vector PDF 1.4 generator (with PNG pHYs 400 dpi metadata on PNGs) + Copy LaTeX figure snippet.
-import {lut} from "./colormaps.js?v=20261123c";
-import {buildTF, TF_W, TF_H} from "./tf.js?v=20261123c";
-import {CM_GLYPHS} from "./cm_font.js?v=20261123c";
+import {lut} from "./colormaps.js?v=20261123d";
+import {buildTF, TF_W, TF_H} from "./tf.js?v=20261123d";
+import {CM_GLYPHS} from "./cm_font.js?v=20261123d";
 
 const BG_HEX = "#05070b";
 const BG_RGB = [5, 7, 11];
