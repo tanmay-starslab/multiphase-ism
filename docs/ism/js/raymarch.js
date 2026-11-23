@@ -132,10 +132,14 @@ float velQ(vec3 v, vec3 p, vec3 d) {
    gas reads as a steep gradient (a real boundary). */
 float qAt(vec3 t, int l) { return (l == 0 ? texture(uGas0, t).r : l == 1 ? texture(uGas1, t).r : texture(uGas2, t).r) * 255.0; }
 vec3 gradAt(vec3 p, int l) {
+  if (l == 0 && length(p) + 2.5 * hl(0) / uN > uMask0) return vec3(0.0);
   vec3 t = p / (2.0 * hl(l)) + 0.5; float e = 1.0 / uN, s = 0.5 * (uGasRange.y - uGasRange.x) / 254.0;
   s *= hl(1) / hl(l);
-  return s * vec3(qAt(t + vec3(e, 0.0, 0.0), l) - qAt(t - vec3(e, 0.0, 0.0), l), qAt(t + vec3(0.0, e, 0.0), l) - qAt(t - vec3(0.0, e, 0.0), l),
-                  qAt(t + vec3(0.0, 0.0, e), l) - qAt(t - vec3(0.0, 0.0, e), l)); }
+  float qxp = qAt(t + vec3(e, 0.0, 0.0), l), qxm = qAt(t - vec3(e, 0.0, 0.0), l);
+  float qyp = qAt(t + vec3(0.0, e, 0.0), l), qym = qAt(t - vec3(0.0, e, 0.0), l);
+  float qzp = qAt(t + vec3(0.0, 0.0, e), l), qzm = qAt(t - vec3(0.0, 0.0, e), l);
+  if (min(min(min(qxp, qxm), min(qyp, qym)), min(qzp, qzm)) < 1.0) return vec3(0.0);
+  return s * vec3(qxp - qxm, qyp - qym, qzp - qzm); }
 /* TF lookup at normalised value x and gradient magnitude gn (row 0 when the TF is 1D: all rows are equal) */
 vec4 tfAt(float x, float gn) { return texture(uTF, vec2((clamp(x, 0.0, 1.0) * 255.0 + 0.5) / 256.0, (clamp(gn, 0.0, 1.0) * 63.0 + 0.5) / 64.0)); }
 /* headlight shading: two-sided Lambert + a soft Blinn-Phong lobe (light = view = −d, so H = −d), normal = the gradient;
@@ -194,7 +198,7 @@ void main() {
     float ta = bp[s], tl = bp[s + 1] - ta; if (tl <= 1e-7 * uHalf.x) continue;
     vec3 pm = o + d * (ta + 0.5 * tl);
     int lg = gasOn ? pick(gHave, pm, 3) : -1, lw = (weighted || tfW) ? pick(uWHave, pm, 3) : -1, ls = starOn ? pick(uStarHave, pm, 3) : -1;
-    float fp = uPxAng * max(length(pm - o), 1e-4 * uHalf.x), mg = 1.0, mw = 1.0, ms = 1.0; int cg = -1, cw = -1, cs = -1;
+    float fp = uPxAng * max(length(o), 1e-4 * uHalf.x), mg = 1.0, mw = 1.0, ms = 1.0; int cg = -1, cw = -1, cs = -1;
     lg = lodLevel(gHave, pm, lg, fp, uLodC.x, cg, mg); lw = lodLevel(uWHave, pm, lw, fp, uLodC.x, cw, mw);
     ls = lodLevel(uStarHave, pm, ls, fp, uLodC.y, cs, ms);
     bool doGas = lg >= 0 && !(uMode == 1 && A > 0.99);

@@ -6,7 +6,7 @@ export const LAYOUTS = ["1", "2R", "2SN", "4"];
 export const LAYOUT_LABEL = {"1": "Single", "2R": "Compare R", "2SN": "Compare S/N", "4": "Compare both"};
 export const LAYOUT_TITLE = {"1": "One case: one R and one S/N", "2R": "Two R at one S/N", "2SN": "Two S/N at one R",
   "4": "Two R by two S/N"};
-export const ID_RE = /^((face|edge|rand)_b\d{3}_a\d{3}(_s\d+)?|cust_[0-9a-f]{10})$/;
+export const ID_RE = /^((face|edge|rand)_(?:b\d{3}_a\d{3}(_s\d+)?|i\d{3,4})|cust_[0-9a-f]{10}|[A-Za-z0-9_]{3,40})$/;
 export const PAGE_LAYOUT = "1";                 // owner's decision (pick.md): the page opens on one large case
 
 /* CFG v3 -> {IONS, ION, KEYS, BANDS, BAND_KEYS, SNR, DEF}. Missing pieces give an empty registry (bare template). */

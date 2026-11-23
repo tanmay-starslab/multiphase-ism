@@ -12,8 +12,17 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;",
 export const kindOf = e => (e.orientation === "custom" || e.kind === "endpoints") ? "custom" : e.source === "generated" ? "generated" : "library";
 export const nShow = e => +e.n_showcase_ions || 0;
 const fb = x => Number.isInteger(+x) ? String(+x) : fmtNum(+x, 1);
-/* clean values: kpc to the integer from 10 kpc up, angles to the degree */
+/* clean values: kpc from 1 kpc up, pc from 0.05 pc up, AU below */
 const kpc = x => (Math.abs(+x) >= 10 ? String(Math.round(+x)) : fb(+x || 0));
+const fmtLenKpc = x => {
+  const v = +x || 0, a = Math.abs(v);
+  if (a === 0) return "0 pc";
+  if (a >= 1) return `${kpc(v)} kpc`;
+  const pc = v * 1000, apc = Math.abs(pc);
+  if (apc >= 10) return `${Math.round(pc)} pc`;
+  if (apc >= 0.05) return `${fb(pc)} pc`;
+  return `${Math.round(pc * 206264.8)} AU`;
+};
 const deg = x => String(Math.round(+x || 0) % 360);
 
 /* the orientation, drawn as the disk looks along the ray (stroke icons in a 16 px box) */
@@ -23,21 +32,25 @@ const GLYPH = {
   "edge-on": '<ellipse cx="8" cy="8" rx="6.4" ry="1.7"/>' + DOT,
   random: '<ellipse cx="8" cy="8" rx="6.2" ry="3.9" transform="rotate(-24 8 8)"/>' + DOT,
   custom: '<path d="M3.2 12.8 12.8 3.2"/><circle cx="3.2" cy="12.8" r="1.5" fill="currentColor" stroke="none"/><circle cx="12.8" cy="3.2" r="1.5" fill="currentColor" stroke="none"/>'};
-export const orientOf = e => kindOf(e) === "custom" ? "custom" : GLYPH[e.orientation] ? e.orientation : "random";
+const normOrient = o => (o === "face" ? "face-on" : o === "edge" ? "edge-on" : o === "rand" ? "random" : o);
+export const orientOf = e => { const o = normOrient(e && e.orientation); return kindOf(e) === "custom" ? "custom" : GLYPH[o] ? o : "random"; };
 export const glyph = o => `<svg class="og" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${GLYPH[o] || GLYPH.random}</svg>`;
 
 /* the clean parameters of an entry, [[symbol, value]] (no id, no seed) */
 export function sightParams(e) {
-  if (kindOf(e) === "custom") return [["L", `${Math.round(+e.length_kpc || 0)} kpc`], ["b", `${kpc(e.b_kpc)} kpc`]];
-  return [["b", `${kpc(e.b_kpc)} kpc`], ["Φ", `${deg(e.azimuth_deg)}°`]];
+  if (kindOf(e) === "custom") return [["L", fmtLenKpc(+e.length_kpc || 0)], ["b", fmtLenKpc(e.b_kpc)]];
+  return [["b", fmtLenKpc(e.b_kpc)], ["Φ", `${deg(e.azimuth_deg)}°`]];
 }
+
+const ORI_LAB = {"face-on": "Normal (+z)", "edge-on": "In-plane (xy)", random: "Oblique 3D", custom: "Custom"};
+export const orientLabel = o => ORI_LAB[o] || o;
 
 /* the label of an entry as {html, text}: glyph, orientation word, parameters; the text form puts two spaces between
    fields (no dot separators) */
 export function sightLabel(e) {
-  const o = orientOf(e), ps = sightParams(e);
-  return {html: glyph(o) + `<span class="ow">${o}</span>` + ps.map(([k, v]) => `<span class="pv"><i>${esc(k)}</i>${esc(v)}</span>`).join(""),
-    text: [o, ...ps.map(([k, v]) => `${k} ${v}`)].join("  ")};
+  const o = orientOf(e), ow = orientLabel(o), ps = sightParams(e);
+  return {html: glyph(o) + `<span class="ow">${esc(ow)}</span>` + ps.map(([k, v]) => `<span class="pv"><i>${esc(k)}</i>${esc(v)}</span>`).join(""),
+    text: [ow, ...ps.map(([k, v]) => `${k} ${v}`)].join("  ")};
 }
 
 /* the one-line tip of the top-bar sightline button: the id (and the seed of a random ray), then the action */
@@ -76,7 +89,7 @@ export function parseQuery(q) {
   return out;
 }
 const fields = e => { const f = {}; for (const [k, v] of sightParams(e)) f[k] = parseFloat(v); if (e.seed != null) f.seed = +e.seed; return f; };
-const words = e => [e.id, orientOf(e), kindOf(e) !== "library" ? "yours generated" : ""].join(" ").toLowerCase();
+const words = e => [e.id, orientOf(e), orientLabel(orientOf(e)), kindOf(e) !== "library" ? "yours generated" : ""].join(" ").toLowerCase();
 export function matches(e, terms) {
   if (!terms.length) return true;
   const f = fields(e), w = words(e);

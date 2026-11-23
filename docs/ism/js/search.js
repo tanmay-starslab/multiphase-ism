@@ -125,7 +125,7 @@ export function mountFind(root, app, opts = {}) {
     pair("fq_logN", "log N", {min: "10", max: "19", step: "0.1"}),
     pair("fq_b", "b [km/s]", {min: "0", max: "150", step: "1"}),
     pair("fq_bkpc", "impact b [kpc]", {min: "0", max: "400", step: "1"}),
-    sel("fq_orient", "orientation", [["", "any"], ["face-on", "face-on"], ["edge-on", "edge-on"], ["random", "random"], ["custom", "custom"]]),
+    sel("fq_orient", "orientation", [["", "any"], ["face-on", "Normal (+z)"], ["edge-on", "In-plane (xy)"], ["random", "Oblique 3D"], ["custom", "custom"]]),
     sel("fq_sort", "sort", [["score", "score"], ["b_kpc", "impact b"], ["n", "components"]]),
     h("div", {class: "row", style: "margin-top:6px"}, h("button", {type: "submit", class: "btn primary", text: "Search"}), h("button", {type: "reset", class: "btn", text: "Reset"})));
   const msg = h("p", {class: "msg", "aria-live": "polite", id: "find-msg", text: "loading components…"});

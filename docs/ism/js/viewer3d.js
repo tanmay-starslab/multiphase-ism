@@ -620,7 +620,7 @@ async function create(app, opts = {}) {
       <div class="v3c-row" id="v3-weight-row" hidden><label for="v3-weight">weight</label><select id="v3-weight" data-tip="Density that weights the velocities: all gas or one ion"></select></div>
       <div class="v3c-row" id="v3-cmap-row"><label for="v3-cmap">colours</label><select id="v3-cmap" data-tip="Colour map of the field"></select></div></section>
     <section class="v3c-card" data-group="view" data-tab="view"><h2>View</h2>
-      <div class="v3c-btns presets"><button type="button" class="v3c-btn" data-p="face-on" data-tip="Look down the disk normal (F)">Face-on</button><button type="button" class="v3c-btn" data-p="edge-on" data-tip="Look at the disk from its side (E)">Edge-on</button>
+      <div class="v3c-btns presets"><button type="button" class="v3c-btn" data-p="face-on" data-tip="Look across the mixing interface / stratified midplane (+z, F)">Normal (+z)</button><button type="button" class="v3c-btn" data-p="edge-on" data-tip="Look along the shear layer / ISM midplane (xy, E)">In-plane (xy)</button>
         <button type="button" class="v3c-btn" data-p="sightline" data-tip="Look along the selected sightline, as its spectrum sees it (A)">Along ray</button><button type="button" class="v3c-btn" data-p="reset" data-tip="Default camera view (R)">Reset</button></div>
       <div class="v3c-row v3c-speed"><label for="v3-orbit-axis">orbit axis</label><select id="v3-orbit-axis" data-testid="v3-orbit-axis" data-tip="Axis the orbit turns around"><option value="auto">auto</option><option value="spin">rotation axis</option><option value="major">major axis</option><option value="minor">minor axis</option></select></div>
       <div class="v3c-row v3c-speed"><label for="v3-orbit-speed">orbit speed</label><input id="v3-orbit-speed" data-testid="v3-orbit-speed" type="range" min="1" max="45" step="1" value="20" data-tip="How fast the orbit turns (degrees per second)"><output id="v3-orbit-speed-o">20°/s</output></div>
@@ -724,6 +724,26 @@ async function create(app, opts = {}) {
   RM.uniforms.uDustScat = {value: DUST_LAWS.skirt.scat};
   RM.material.fragmentShader = RM.material.fragmentShader
     .replace("in vec3 vPos;", "uniform float uDust, uDustScat; uniform vec3 uDustVec; in vec3 vPos;")
+    .replace(`vec3 gradAt(vec3 p, int l) {
+  if (l == 0 && length(p) + 2.5 * hl(0) / uN > uMask0) return vec3(0.0);
+  vec3 t = p / (2.0 * hl(l)) + 0.5; float e = 1.0 / uN, s = 0.5 * (uGasRange.y - uGasRange.x) / 254.0;
+  s *= hl(1) / hl(l);
+  float qxp = qAt(t + vec3(e, 0.0, 0.0), l), qxm = qAt(t - vec3(e, 0.0, 0.0), l);
+  float qyp = qAt(t + vec3(0.0, e, 0.0), l), qym = qAt(t - vec3(0.0, e, 0.0), l);
+  float qzp = qAt(t + vec3(0.0, 0.0, e), l), qzm = qAt(t - vec3(0.0, 0.0, e), l);
+  if (min(min(min(qxp, qxm), min(qyp, qym)), min(qzp, qzm)) < 1.0) return vec3(0.0);
+  return s * vec3(qxp - qxm, qyp - qym, qzp - qzm); }`,
+      `vec3 gradAt(vec3 p, int l) {
+  if (l == 0 && length(p) + 2.5 * hl(0) / uN > uMask0) return vec3(0.0);
+  vec3 t = p / (2.0 * hl(l)) + 0.5; float e = 1.0 / uN, s = 0.5 * (uGasRange.y - uGasRange.x) / 254.0;
+  s *= (100.0 * ${boxScale.toExponential(6)}) / hl(l);
+  float qxp = qAt(t + vec3(e, 0.0, 0.0), l), qxm = qAt(t - vec3(e, 0.0, 0.0), l);
+  float qyp = qAt(t + vec3(0.0, e, 0.0), l), qym = qAt(t - vec3(0.0, e, 0.0), l);
+  float qzp = qAt(t + vec3(0.0, 0.0, e), l), qzm = qAt(t - vec3(0.0, 0.0, e), l);
+  if (min(min(min(qxp, qxm), min(qyp, qym)), min(qzp, qzm)) < 1.0) return vec3(0.0);
+  return s * vec3(qxp - qxm, qyp - qym, qzp - qzm); }`)
+    .replace("float fp = uPxAng * max(length(pm - o), 1e-4 * uHalf.x), mg = 1.0, mw = 1.0, ms = 1.0;",
+      "float fp = uPxAng * max(length(o), 1e-4 * uHalf.x), mg = 1.0, mw = 1.0, ms = 1.0;")
     .replace("vec3 starAt(vec3 p, int l) {", `float decDust(float q) { return q < 0.5 || q >= 254.5 ? 0.0 : exp2(LOG2_10 * (-4.5 + (q - 1.0) * 6.0 / 253.0)); }
 float exactDust(sampler3D s, vec3 p, float h) {
   vec3 g = (p / (2.0 * h) + 0.5) * uN - 0.5, i0 = floor(g), f = g - i0; ivec3 b = ivec3(i0), hi = ivec3(int(uN) - 1); float v = 0.0;
@@ -1500,7 +1520,7 @@ vec3 starAt(vec3 p, int l) {`)
     const al = `3D view, ${mode} mode${what}` +
       `; stars ${layer.stars ? "on" : "off"}; finest level ${fin || "none"}${layer.stars ? `, stars ${sfin || "none"}` : ""}` +
       `; ${LINE_IDS.length} sightlines drawn${nNoEnds ? ` (${nNoEnds} more have no stored endpoints)` : ""}${selId ? `; selected ${selId}${hasEnds(app.entry(selId)) ? "" : " (not drawn: no stored endpoints)"}` : ""}.` +
-      ` Arrow keys rotate, + and − zoom, F face-on, E edge-on, A along the selected sightline, R reset, C re-centre on the galaxy, double-click to orbit there, P pick a ray, M mode, S stars, G guides, Shift+F fullscreen.` +
+      ` Arrow keys rotate, + and − zoom, F Normal (+z), E In-plane (xy), A along the selected sightline, R reset, C re-centre on the volume, double-click to orbit there, P pick a ray, M mode, S stars, G guides, Shift+F fullscreen.` +
       (offCentre(pivotArr()) ? ` Orbit centre ${pivotArr().map(fmtKpc).join(", ")} kpc.` : "");
     if (canvas.getAttribute("aria-label") !== al) canvas.setAttribute("aria-label", al); }
 
@@ -1541,7 +1561,7 @@ vec3 starAt(vec3 p, int l) {`)
     selUniforms();
     renderer.getDrawingBufferSize(accSize); U.uPxAng.value = 2 * Math.tan(camera.fov * Math.PI / 360) / Math.max(accSize.y, 1);
     U.uLodC.value.set(species ? lodField(species) : LOD_C.gas, LOD_C.stars);
-    const dT = camera.position.distanceTo(controls.target); U.uNear.value.set(NEAR[0] * dT, NEAR[1] * dT);
+    const dT = camera.position.distanceTo(controls.target), nearD = U.uMode.value === 0 ? 0 : Math.min(dT * 0.12, 12.0 * boxScale); U.uNear.value.set(0.35 * nearD, nearD);
     if (exact) {
       if (accRT.width !== accSize.x || accRT.height !== accSize.y) { accRT.setSize(accSize.x, accSize.y); accK = 0; }
       const k = accK, [sx, sy] = SUB[k % ACC_N]; U.uSub.value.set(2 * sx / accSize.x, 2 * sy / accSize.y); U.uAccW.value = 1 / (k + 1);
@@ -1940,9 +1960,9 @@ vec3 starAt(vec3 p, int l) {`)
   const idEl = q("#v3-id");
   function idBadge() { if (!idEl) return; const g = app.config?.galaxy || G, id = (typeof app.galaxy === "function" ? app.galaxy() : null) ?? g.subhalo_id;
     idEl.hidden = id == null || typeof app.openCredits !== "function"; if (id == null) return;
-    const sim = g.sim || "TNG50-1", z = g.redshift ?? 0, fire = /^FIRE/i.test(sim);
-    idEl.querySelector(".s").textContent = sim; idEl.querySelector(".g").textContent = fire ? `Halo ${id}` : `Subhalo ${id}`; idEl.querySelector(".z").textContent = `z = ${z}`;
-    idEl.setAttribute("aria-label", `${sim} ${fire ? "halo" : "subhalo"} ${id} at redshift ${z}, data credits`); }
+    const sim = g.sim || "RTML-Athena++", z = g.redshift ?? 0;
+    idEl.querySelector(".s").textContent = sim; idEl.querySelector(".g").textContent = `Volume ${id}`; idEl.querySelector(".z").textContent = `z = ${z}`;
+    idEl.setAttribute("aria-label", `${sim} Volume ${id} at redshift ${z}, data credits`); }
   idEl?.addEventListener("click", ev => { ev.stopPropagation(); app.openCredits?.(idEl); });
   idEl?.addEventListener("pointerdown", ev => ev.stopPropagation());
   const onGal = () => idBadge(); addEventListener("tng:galaxy", onGal); idBadge();

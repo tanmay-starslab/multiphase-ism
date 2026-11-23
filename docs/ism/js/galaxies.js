@@ -1,21 +1,94 @@
-// Galaxy picker of the TNG50 explorer (galaxy-sample spec, web contract): the page's galaxy index (CFG.galaxies, written
-// by scripts/export_tng50_web.py --galaxies), the URL state g=<id>, where a galaxy's pack lives, and the glass popover
-// #gxy-pop (search, sort by M*, SFR, M200c or id, filter centrals/satellites, tips).
-//
-// CFG.galaxies = {default, base, viz_base, list: [{id, label, Mstar, SFR, M200c, R200c, central, mw, m31, n, viz, base?,
-//                  src?, gas_poor?}]}   (src: "sbi" | "trident", the galaxy's spectra source; gas_poor: no cold gas disk)
-// or null (one galaxy: no picker). The default galaxy keeps the page's legacy data/ paths (CFG.catalog_url, bin_dir,
-// components_url, viz); every other galaxy is read from <base><id>/:
-//   catalog.json  s/<sid>.bin  components.json  galaxy.json  viz/manifest_v2.json   (cubes from viz_base, {id} replaced)
-// The pure part (galaxyIndex, parseGalaxy, packFor, sortGalaxies, matchGalaxy, fmt*) runs in node
-// (tests/js/galaxies_unit.mjs); createGalaxyPicker needs a DOM.
+// Galaxy / volume picker of the Multiphase ISM & Mixing Layer Explorer (galaxy-sample spec, web contract):
+// the page's volume index (CFG.galaxies), the URL state g=<id>, where a volume's pack lives, and the glass popover
+// #gxy-pop (search, sort by M*, SFR, M200c or id, filter by simulation suite, tips).
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 const ID_OK = /^(?:\d{1,9}|[A-Za-z][A-Za-z0-9_]{1,23})$/;
 export const normId = x => (/^\d{1,9}$/.test(String(x ?? "")) ? +x : String(x ?? ""));
+export const isRtml = e => !!(e && (/^rtml/i.test(String(e.sim || e.simKey || "")) || /^rtml/i.test(String(e.id ?? ""))));
+export const isIsm = e => !!(e && (/^tigress|^ism/i.test(String(e.sim || e.simKey || "")) || /^ism_/i.test(String(e.id ?? ""))));
 export const isFire = e => !!(e && (/^fire/i.test(String(e.sim || e.simKey || "")) || /^m\d|^Romeo|^Juliet|^Romulus|^Remus|^Thelma|^Louise/i.test(String(e.id ?? ""))));
-export const galNoun = e => (isFire(e) ? "Halo" : "Subhalo");
-export const galWord = (e, id) => `${isFire(e) ? "Halo" : "Subhalo"} ${id ?? e?.id ?? ""}`.trim();
+
+export function inferSim(e) {
+  if (e && e.sim) return String(e.sim);
+  const id = String(e?.id ?? e ?? "");
+  if (/^rtml/i.test(id)) return "RTML-Athena++";
+  if (/^ism_|^tigress/i.test(id)) return "TIGRESS-ISM";
+  if (/^m\d|^Romeo|^Juliet|^Romulus|^Remus|^Thelma|^Louise/i.test(id)) return "FIRE-2";
+  return "TNG50-1";
+}
+
+export function inferSimKey(e) {
+  if (e && e.simKey && ["rtml", "ism", "tng50", "fire2"].includes(e.simKey)) return e.simKey;
+  const s = inferSim(e).toLowerCase(), id = String(e?.id ?? e ?? "").toLowerCase();
+  if (s.startsWith("rtml") || id.startsWith("rtml") || isRtml(e)) return "rtml";
+  if (s.startsWith("tigress") || s.startsWith("ism") || id.startsWith("ism_") || isIsm(e)) return "ism";
+  if (s.startsWith("fire") || isFire(e)) return "fire2";
+  return "tng50";
+}
+
+export const SIM_META = {
+  rtml: {
+    label: "50 pc RTML",
+    shortLabel: "50 pc RTML",
+    title: "ISM & Mixing Layers",
+    groupTitle: "Radiative Turbulent Mixing Layer (50 pc → 2517 AU, Athena++)",
+    msg: "50 pc → 2517 AU Radiative Turbulent Mixing Layer (Athena++ KHI + radiative cooling)",
+    tip: "Show 50 pc Radiative Turbulent Mixing Layer (RTML_50pc)",
+    topTip: "Switch to 50 pc → 2517 AU Radiative Turbulent Mixing Layer (RTML_50pc)",
+    tag: "RTML 50pc",
+    tagTip: "50 pc → 2517 AU Radiative Turbulent Mixing Layer (Athena++)",
+    credit: "Simulation: 50 pc Radiative Turbulent Mixing Layer (Athena++ RTML)"
+  },
+  ism: {
+    label: "1 kpc ISM",
+    shortLabel: "1 kpc ISM",
+    title: "ISM & Mixing Layers",
+    groupTitle: "Stratified Multiphase ISM & Superbubble Fountain (1 kpc → 0.048 pc, TIGRESS)",
+    msg: "1 kpc → 0.048 pc Stratified Multiphase ISM & Superbubble Fountain (TIGRESS-ISM)",
+    tip: "Show 1 kpc Stratified Multiphase ISM (ISM_1kpc)",
+    topTip: "Switch to 1 kpc → 0.048 pc Stratified Multiphase ISM (ISM_1kpc)",
+    tag: "ISM 1kpc",
+    tagTip: "1 kpc → 0.048 pc Stratified Multiphase ISM (TIGRESS-ISM)",
+    credit: "Simulation: 1 kpc Stratified Multiphase ISM (TIGRESS-ISM)"
+  },
+  tng50: {
+    label: "TNG50",
+    shortLabel: "TNG50",
+    title: "TNG50 sightlines",
+    groupTitle: "TNG50-1 Milky Way and M31 analogues",
+    msg: "TNG50-1 z = 0 Milky Way and M31 analogues",
+    tip: "Show only TNG50-1 galaxies",
+    topTip: "Switch to IllustrisTNG TNG50-1 galaxies",
+    tag: "TNG50",
+    tagTip: "IllustrisTNG TNG50-1 cosmological simulation",
+    credit: "Simulation: IllustrisTNG TNG50-1 (TNG Collaboration)"
+  },
+  fire2: {
+    label: "FIRE-2",
+    shortLabel: "FIRE-2",
+    title: "FIRE-2 sightlines",
+    groupTitle: "FIRE-2 zoom-in halos",
+    msg: "FIRE-2 z = 0 zoom-in halos",
+    tip: "Show only FIRE-2 zoom-in halos",
+    topTip: "Switch to FIRE-2 zoom-in halos",
+    tag: "FIRE-2",
+    tagTip: "FIRE-2 cosmological zoom-in simulation",
+    credit: "Simulation: FIRE-2 (FIRE Collaboration)"
+  }
+};
+export const SIM_ORDER = ["rtml", "ism", "tng50", "fire2"];
+export const galNoun = e => {
+  const sk = inferSimKey(e);
+  return sk === "rtml" || sk === "ism" ? "Volume" : sk === "fire2" ? "Halo" : "Subhalo";
+};
+export const galWord = (e, id) => `${galNoun(e || {id})} ${id ?? e?.id ?? ""}`.trim();
+export const galShortLabel = e => {
+  const id = String(e?.id ?? e ?? "");
+  if (id === "RTML_50pc") return "50 pc RTML";
+  if (id === "ISM_1kpc") return "1 kpc ISM";
+  return id;
+};
 
 /* ---------------- index ---------------- */
 /* -> {default, base, vizBase, list, byId} or null when the config lists fewer than two usable galaxies */
@@ -24,8 +97,8 @@ export function galaxyIndex(cfg) {
   if (!G || !Array.isArray(G.list)) return null;
   const list = G.list.filter(e => e && ID_OK.test(String(e.id))).map(e => {
     const id = normId(e.id);
-    const sim = e.sim ? String(e.sim) : (/^m\d|^Romeo|^Juliet|^Romulus|^Remus|^Thelma|^Louise/i.test(String(id)) ? "FIRE-2" : "TNG50-1");
-    const simKey = /fire/i.test(sim) ? "fire2" : "tng50";
+    const sim = inferSim({...e, id});
+    const simKey = inferSimKey({...e, id, sim});
     return {...e, id, sim, simKey};
   });
   const byId = new Map(list.map(e => [e.id, e]));
@@ -35,13 +108,17 @@ export function galaxyIndex(cfg) {
   return {default: def, base, vizBase: typeof G.viz_base === "string" && G.viz_base.includes("{id}") ? G.viz_base : null, list, byId};
 }
 
-const normSimKey = s => {
+export const normSimKey = s => {
   const v = String(s || "").trim().toLowerCase();
-  return v === "fire" || v === "fire2" || v === "fire-2" ? "fire2" : v === "tng" || v === "tng50" || v === "tng50-1" ? "tng50" : "";
+  if (v === "rtml" || v === "rtml_50pc" || v === "rtml-50pc" || v === "rtml50pc" || v === "rtml-athena++" || v === "athena++") return "rtml";
+  if (v === "ism" || v === "ism_1kpc" || v === "ism-1kpc" || v === "ism1kpc" || v === "tigress" || v === "tigress-ism") return "ism";
+  if (v === "fire" || v === "fire2" || v === "fire-2") return "fire2";
+  if (v === "tng" || v === "tng50" || v === "tng50-1") return "tng50";
+  return "";
 };
 
 /* g=<id> from the hash (wins) or the query; null when absent or malformed.
-   When gix (index) is given as the 2nd or 3rd argument, also supports #sim=fire2 (picks first matching galaxy if g= is omitted). */
+   When gix (index) is given as the 2nd or 3rd argument, also supports #sim=ism (picks first matching volume if g= is omitted). */
 export function parseGalaxy(hash = "", search = "", gix = null) {
   let index = gix, srch = search;
   if (search && typeof search === "object" && Array.isArray(search.list)) { index = search; srch = ""; }
@@ -68,11 +145,12 @@ export function unlistedGalaxy(index, hash, search) {
   const g = parseGalaxy(hash, search);
   return g != null && !index.byId.has(g) ? g : null;
 }
-/* the hash prefix for a galaxy: "" for the default (URLs of the default galaxy are unchanged), else "g=<id>&" (or "sim=fire2&g=<id>&" for FIRE-2) */
+/* the hash prefix for a galaxy: "" for the default (URLs of the default galaxy are unchanged), else "g=<id>&" (or "sim=<simKey>&g=<id>&" for non-default simulations) */
 export const galaxyHashPart = (index, id) => {
   if (!index || id == null || id === index.default) return "";
   const e = index.byId && index.byId.get(normId(id));
-  return e && e.simKey === "fire2" ? `sim=fire2&g=${id}&` : `g=${id}&`;
+  const sk = e && e.simKey;
+  return sk && sk !== "tng50" && sk !== "rtml" ? `sim=${sk}&g=${id}&` : `g=${id}&`;
 };
 
 /* where a galaxy's data lives. legacy = the page's own config for the default galaxy (catalog_url, bin_dir,
@@ -90,7 +168,6 @@ export function packFor(index, id, legacy) {
     return {id: index ? index.default : null, legacy: true, catalog_url: legacy.catalog_url, bin_dir: legacy.bin_dir,
       components_url: legacy.components_url, galaxy_url: null, viz: legacy.viz || null};
   }
-  // per-galaxy base (hosting index: packs sharded over several HF datasets) wins over the shared <base><id>/
   const e = index.byId.get(id), b = packBase(e) || index.base + id + "/";
   const viz = e.viz ? {manifest_url: b + "viz/manifest_v2.json", base: index.vizBase ? index.vizBase.split("{id}").join(String(id)) : b + "viz/",
     fallback_base: null, dataset: null} : null;
@@ -105,32 +182,34 @@ export const kindWord = e => (e.central === true ? "central" : e.central === fal
 /* the spectra source of an index entry or a catalogue's spectra_source block: "sbi" | "trident" | "" (unknown) */
 export const srcOf = x => { const v = String((x && (x.src ?? x.source)) || "").toLowerCase(); return v.startsWith("sbi") ? "sbi" : v === "trident" ? "trident" : ""; };
 export const SRC_WORD = {sbi: "THOR spectra", trident: "Trident spectra"};
-/* the compact properties of a galaxy (an index entry) for the chat's tools and page snapshot: log masses and SFR rounded,
-   the spectra source in words */
+/* the compact properties of a galaxy (an index entry) for the chat's tools and page snapshot */
 export function galaxySummary(e) {
   if (!e) return null;
   const L = x => (Number.isFinite(+x) && +x > 0 ? +Math.log10(+x).toFixed(2) : null), s = srcOf(e);
-  return {id: normId(e.id), sim: e.sim || (isFire(e) ? "FIRE-2" : "TNG50-1"), logMstar: L(e.Mstar), logM200c: L(e.M200c), R200c_kpc: Number.isFinite(+e.R200c) && +e.R200c > 0 ? Math.round(+e.R200c) : null,
+  return {id: normId(e.id), sim: inferSim(e), logMstar: L(e.Mstar), logM200c: L(e.M200c), R200c_kpc: Number.isFinite(+e.R200c) && +e.R200c > 0 ? +e.R200c : null,
     SFR: e.SFR == null || !Number.isFinite(+e.SFR) ? null : +(+e.SFR).toPrecision(3), central: typeof e.central === "boolean" ? e.central : null,
     gas_poor: !!e.gas_poor, spectra: s === "sbi" ? "THOR" : s === "trident" ? "Trident" : null, n_sightlines: Number.isFinite(+e.n) && e.n !== null ? +e.n : null,
     has_3d: !!e.viz};
 }
-/* the full description (aria-label of a row) and the short tip (12 words at most, the page's tip budget) */
+const simBadgeName = e => {
+  const sk = inferSimKey(e);
+  return sk === "tng50" ? "" : (SIM_META[sk]?.tag || inferSim(e));
+};
 export function galaxyAria(e) {
   if (!e) return "";
-  const p = [galWord(e), isFire(e) ? "FIRE-2" : "", kindWord(e), Number.isFinite(+e.Mstar) && e.Mstar ? `log M* ${lg(e.Mstar)}` : "",
+  const p = [galWord(e), simBadgeName(e), kindWord(e), Number.isFinite(+e.Mstar) && e.Mstar ? `log M* ${lg(e.Mstar)}` : "",
     e.SFR != null ? `SFR ${fmtSfr(e.SFR)} M⊙/yr` : "", Number.isFinite(+e.M200c) && e.M200c ? `log M200c ${lg(e.M200c)}` : "",
     e.n ? `${e.n} sightlines` : "", srcOf(e) ? SRC_WORD[srcOf(e)] : "", e.gas_poor ? "gas-poor, little cold gas" : "",
     e.viz ? "" : "no 3D data"].filter(Boolean);
   return p.join(", ");
 }
 export function galaxyTip(e) {
-  if (!e) return "Pick a galaxy from the TNG50 and FIRE-2 sample";
-  return [galWord(e), isFire(e) ? "FIRE-2" : "", kindWord(e), e.n ? `${e.n} sightlines` : "", e.gas_poor ? "gas-poor" : "", e.viz ? "" : "no 3D data"].filter(Boolean).join(", ");
+  if (!e) return "Pick a simulation volume (50 pc RTML or 1 kpc ISM)";
+  return [galWord(e), simBadgeName(e), kindWord(e), e.n ? `${e.n} sightlines` : "", e.gas_poor ? "gas-poor" : "", e.viz ? "" : "no 3D data"].filter(Boolean).join(", ");
 }
 
 /* ---------------- sort and search ---------------- */
-export const SORTS = {Mstar: "stellar mass", SFR: "star formation rate", M200c: "halo mass", id: "subhalo id"};
+export const SORTS = {Mstar: "stellar mass", SFR: "star formation rate", M200c: "halo mass", id: "volume id"};
 /* stable sort; missing values last in either direction */
 export function sortGalaxies(list, key = "Mstar", dir = -1) {
   const v = e => (key === "id" ? e.id : Number.isFinite(+e[key]) && e[key] !== null ? +e[key] : null);
@@ -147,12 +226,10 @@ export function sortGalaxies(list, key = "Mstar", dir = -1) {
     return (x - y) * dir || i - j;
   }).map(([e]) => e);
 }
-/* query terms (AND): digits match the subhalo id as a prefix; "central"/"cen", "satellite"/"sat", "mw", "m31" and "3d"
-   match flags; "m*>10.8", "sfr<1", "m200>12" compare (log masses, linear SFR); other words match the label */
 const CMP = /^(m\*|mstar|ms|sfr|m200c?|mh)(<=|>=|<|>|=)(-?\d+(?:\.\d+)?)$/;
 export function matchGalaxy(e, q) {
   const terms = String(q || "").toLowerCase().replace(/\s*(<=|>=|<|>|=)\s*/g, "$1").split(/\s+/).filter(Boolean);
-  const sk = e && e.simKey ? e.simKey : (isFire(e) ? "fire2" : "tng50");
+  const sk = inferSimKey(e);
   return terms.every(t => {
     if (/^\d+$/.test(t)) return String(e.id).startsWith(t);
     const m = t.match(CMP);
@@ -163,8 +240,14 @@ export function matchGalaxy(e, q) {
       return {"<": x < y, ">": x > y, "<=": x <= y, ">=": x >= y, "=": Math.abs(x - y) < 0.005}[m[2]];
     }
     if (t === "sim:all") return true;
-    if (t === "sim:fire2" || t === "sim:fire" || t === "fire" || t === "fire2" || t === "fire-2") return sk === "fire2";
-    if (t === "sim:tng50" || t === "sim:tng" || t === "tng" || t === "tng50" || t === "tng50-1") return sk === "tng50";
+    if (t.startsWith("sim:")) {
+      const want = normSimKey(t.slice(4));
+      return want ? sk === want : false;
+    }
+    if (t === "rtml" || t === "athena++" || t === "mixing") return sk === "rtml";
+    if (t === "ism" || t === "tigress") return sk === "ism";
+    if (t === "fire" || t === "fire2" || t === "fire-2") return sk === "fire2";
+    if (t === "tng" || t === "tng50" || t === "tng50-1") return sk === "tng50";
     if (t === "central" || t === "cen" || t === "centrals") return e.central === true;
     if (t === "satellite" || t === "sat" || t === "satellites") return e.central === false;
     if (t === "mw") return e.mw === true;
@@ -179,7 +262,7 @@ export function matchGalaxy(e, q) {
 export function filterGalaxies(list, q = "", filter = "all", sim = "all") {
   const sk = sim === "all" || !sim ? "all" : (normSimKey(sim) || sim);
   return (list || []).filter(e => {
-    const esk = e.simKey || (isFire(e) ? "fire2" : "tng50");
+    const esk = inferSimKey(e);
     if (sk !== "all" && esk !== sk) return false;
     if (filter === "central" && e.central !== true) return false;
     if (filter === "satellite" && e.central !== false) return false;
@@ -189,34 +272,46 @@ export function filterGalaxies(list, q = "", filter = "all", sim = "all") {
 
 /* ---------------- popover ---------------- */
 const MAX_ROWS = 400;
-const COLS = [["id", "id", "Galaxy or subhalo id; click to sort"], ["Mstar", "log M*", "Stellar mass, log M⊙; click to sort, again to reverse"],
-  ["SFR", "SFR", "Star formation rate, M⊙/yr; click to sort, again to reverse"], ["M200c", "log M200", "Halo mass M200c, log M⊙; click to sort, again to reverse"]];
+const COLS = [["id", "id", "Volume id; click to sort"], ["Mstar", "log M*", "Stellar mass, log M⊙; click to sort, again to reverse"],
+  ["SFR", "SFR", "Star formation rate, M⊙/yr; click to sort, again to reverse"], ["M200c", "log Mtot", "Total mass, log M⊙; click to sort, again to reverse"]];
+function simTagHtml(e) {
+  const sk = inferSimKey(e);
+  if (sk === "tng50") return "";
+  const m = SIM_META[sk];
+  const label = m ? m.tag : inferSim(e);
+  const tip = m ? m.tagTip : "Hydrodynamic simulation volume";
+  return `<span class="tag" data-tip="${esc(tip)}">${esc(label)}</span>`;
+}
 function tags(e) {
   const t = [];
-  if (isFire(e)) t.push('<span class="tag" data-tip="FIRE-2 cosmological zoom-in simulation">FIRE-2</span>');
+  const st = simTagHtml(e);
+  if (st) t.push(st);
   if (e.central === false) t.push('<span class="tag" data-tip="A satellite: not the central galaxy of its halo">sat</span>');
   if (e.m31 === true) t.push('<span class="tag" data-tip="M31-like in the sample definition">M31</span>');
-  else if (e.mw === true) t.push('<span class="tag" data-tip="Milky Way-like in the sample definition">MW</span>');
+  else if (e.mw === true) t.push('<span class="tag" data-tip="Milky Way-like stratified disk patch">MW</span>');
   if (e.gas_poor === true) t.push('<span class="tag" data-tip="Little cold gas: expect weak low-ion absorption">gas-poor</span>');
-  if (!e.viz) t.push('<span class="tag dim" data-tip="No 3D data published for this galaxy yet">no 3D</span>');
+  if (!e.viz) t.push('<span class="tag dim" data-tip="No 3D data published for this volume yet">no 3D</span>');
   return t.join("");
 }
-/* the current galaxy's card: id, kind and its numbers (two spaces between fields in the text form, no dot separators) */
+const fmtBoxHalf = r => {
+  const v = +r;
+  if (!Number.isFinite(v) || v <= 0) return "";
+  return v < 1 ? `${Math.round(v * 1000)} pc` : `${Math.round(v)} kpc`;
+};
+/* the current volume's card: id, kind and its numbers (two spaces between fields in the text form, no dot separators) */
 export function galaxyCard(e) {
   if (!e) return "";
   const kv = (k, v, tip) => `<span class="pv" data-tip="${esc(tip)}"><i>${k}</i>${esc(v)}</span>`;
-  const fire = isFire(e), head = fire ? `Halo ${e.id}` : `Subhalo ${e.id}`;
-  return `<span class="gxid">${esc(head)}</span>${fire ? '<span class="tag" data-tip="FIRE-2 cosmological zoom-in simulation">FIRE-2</span>' : ""}${kindWord(e) ? `<span class="gxk">${kindWord(e)}</span>` : ""}` +
+  const head = `${galNoun(e)} ${e.id}`;
+  const rTxt = fmtBoxHalf(e.R200c);
+  return `<span class="gxid">${esc(head)}</span>${simTagHtml(e)}${kindWord(e) ? `<span class="gxk">${kindWord(e)}</span>` : ""}` +
     kv("log M*", lg(e.Mstar), "Stellar mass, log M⊙") + kv("SFR", fmtSfr(e.SFR), "Star formation rate, M⊙/yr") +
-    kv("log M200c", lg(e.M200c), "Halo mass M200c, log M⊙") + (Number.isFinite(+e.R200c) && e.R200c ? kv("R200c", `${Math.round(+e.R200c)} kpc`, "Halo radius R200c") : "") +
+    kv("log M200c", lg(e.M200c), "Total / enclosed mass, log M⊙") + (rTxt ? kv("R200c", rTxt, "Volume half-extent") : "") +
     (e.gas_poor ? '<span class="gxk" data-tip="Little cold gas: expect weak low-ion absorption">gas-poor</span>' : "");
 }
 
-/* ---------------- sightline matching across galaxies (review2_ux S1) ---------------- */
+/* ---------------- sightline matching across volumes (review2_ux S1) ---------------- */
 const orientWord = e => (e && e.orientation) || "random";
-/* the entry of `entries` closest to the sightline `cur` of the previous galaxy (rhoCur = its b/R200c): same orientation
-   word first, then the impact parameter in units of R200c and the azimuth from the projected major axis; null without
-   entries. Library rows only (no custom rays). */
 export function nearestSightline(entries, cur, rhoCur, R200c) {
   const R = +R200c, lib = (entries || []).filter(e => e && e.orientation && e.orientation !== "custom" && e.source !== "generated" && Number.isFinite(+e.b_kpc));
   if (!lib.length || !cur || !(R > 0) || !Number.isFinite(+rhoCur)) return null;
@@ -229,8 +324,6 @@ export function nearestSightline(entries, cur, rhoCur, R200c) {
   }
   return best;
 }
-/* a galaxy's opening sightline when nothing is carried over: a random-orientation ray near 0.25 R200c (mid CGM, not the
-   b ~ 0 disk-centre rays that sort first), the best ranked of the closest ones */
 export function defaultSightline(entries, R200c, rho = 0.25) {
   const R = +R200c, lib = (entries || []).filter(e => e && e.orientation && e.orientation !== "custom" && e.source !== "generated" && Number.isFinite(+e.b_kpc));
   if (!lib.length || !(R > 0)) return null;
@@ -243,52 +336,60 @@ export function defaultSightline(entries, R200c, rho = 0.25) {
 export function createGalaxyPicker(els, opts) {
   let view = [], hl = -1, sort = {key: "Mstar", dir: -1}, simFilter = "all";
   const shown = () => view.slice(0, MAX_ROWS);
-  const sims = new Set((opts.index.list || []).map(e => e.simKey || (isFire(e) ? "fire2" : "tng50")));
+  const allList = opts.index.list || [];
+  const counts = {};
+  for (const sk of SIM_ORDER) counts[sk] = 0;
+  for (const e of allList) {
+    const sk = inferSimKey(e);
+    counts[sk] = (counts[sk] || 0) + 1;
+  }
+  const activeSimKeys = SIM_ORDER.filter(sk => counts[sk] > 0);
+  const sims = new Set(activeSimKeys);
   const multiSim = sims.size > 1;
   let simBar = els.pop ? els.pop.querySelector("#gxy-sim") : null;
-  const nTng = (opts.index.list || []).filter(e => (e.simKey || (isFire(e) ? "fire2" : "tng50")) === "tng50").length;
-  const nFire = (opts.index.list || []).filter(e => (e.simKey || (isFire(e) ? "fire2" : "tng50")) === "fire2").length;
   if (multiSim && els.pop && !simBar) {
-    simBar = document.createElement("div");
+    simBar = document.createElement("select");
     simBar.id = "gxy-sim";
-    simBar.className = "seg";
-    simBar.setAttribute("role", "radiogroup");
     simBar.setAttribute("aria-label", "Simulation filter");
-    simBar.innerHTML = [
-      ["all", `All (${nTng + nFire})`, "Show TNG50 and FIRE-2 galaxies grouped by simulation"],
-      ["tng50", `TNG50 (${nTng})`, "Show only TNG50-1 galaxies"],
-      ["fire2", `FIRE-2 (${nFire})`, "Show only FIRE-2 zoom-in halos"]
-    ].map(([v, lab, tip], i) => `<label><input type="radio" name="gxy-sim" value="${v}" data-tip="${esc(tip)}"${i === 0 ? " checked" : ""}><span>${lab}</span></label>`).join("");
-    const fl = els.pop.querySelector(".fl");
-    if (fl) els.pop.insertBefore(simBar, fl); else els.pop.prepend(simBar);
+    simBar.dataset.tip = "Filter volumes by simulation regime";
+    const items = [
+      ["all", `all sims (${allList.length})`],
+      ...activeSimKeys.map(sk => [sk, `${SIM_META[sk].label} (${counts[sk]})`])
+    ];
+    simBar.innerHTML = items.map(([v, lab]) => `<option value="${v}">${esc(lab)}</option>`).join("");
+    const fl = els.pop.querySelector(".fl"), filt = els.pop.querySelector("#gxy-filter");
+    if (fl && filt) fl.insertBefore(simBar, filt);
+    else if (fl) fl.appendChild(simBar);
+    else els.pop.prepend(simBar);
   }
   const msgEl = els.pop ? els.pop.querySelector(".galf .msg") : null;
   function updateMsg() {
     if (!msgEl) return;
     if (!multiSim) {
-      msgEl.textContent = sims.has("fire2") ? "FIRE-2 z = 0 zoom-in halos" : "TNG50-1 z = 0 Milky Way and M31 analogues";
+      const onlySk = activeSimKeys[0] || "rtml";
+      msgEl.textContent = SIM_META[onlySk]?.msg || "Multiphase ISM & Radiative Turbulent Mixing Layer volumes";
       return;
     }
-    msgEl.textContent = simFilter === "fire2" ? "FIRE-2 z = 0 zoom-in halos"
-      : simFilter === "tng50" ? "TNG50-1 z = 0 Milky Way and M31 analogues"
-      : "TNG50-1 and FIRE-2 z = 0 galaxies grouped by simulation";
+    msgEl.textContent = simFilter !== "all" && SIM_META[simFilter]
+      ? SIM_META[simFilter].msg
+      : "50 pc Radiative Turbulent Mixing Layer (RTML_50pc) & 1 kpc Stratified Multiphase ISM (ISM_1kpc)";
   }
   els.head.innerHTML = COLS.map(([k, lab, tip]) => `<button type="button" class="gxs" data-sort="${k}" data-tip="${esc(tip)}" aria-sort="none">${lab}<b aria-hidden="true"></b></button>`).join("") + "<span></span>";
   function row(e, i, cur) {
-    const idTxt = multiSim ? `${isFire(e) ? "Halo" : "Subhalo"} ${e.id}` : String(e.id);
+    const idHtml = multiSim ? `<i class="gxn">${esc(galNoun(e))} </i>${esc(e.id)}` : esc(e.id);
     return `<li role="option" id="gxy-opt-${i}" data-id="${esc(e.id)}" aria-selected="${e.id === cur}" aria-label="${esc(galaxyAria(e))}" data-tip="${esc(galaxyTip(e))}"${i === hl ? ' class="hl"' : ""}>` +
-      `<span class="gxid">${esc(idTxt)}</span><span class="num">${lg(e.Mstar)}</span><span class="num">${fmtSfr(e.SFR)}</span><span class="num">${lg(e.M200c)}</span><span class="gxt">${tags(e)}</span></li>`;
+      `<span class="gxid">${idHtml}</span><span class="num">${lg(e.Mstar)}</span><span class="num">${fmtSfr(e.SFR)}</span><span class="num">${lg(e.M200c)}</span><span class="gxt">${tags(e)}</span></li>`;
   }
   function render() {
     const f = els.filter.value, all = opts.index.list, cur = opts.current();
     const filtered = filterGalaxies(all, els.search.value, f, simFilter);
     if (multiSim && simFilter === "all") {
-      const curE = opts.index.byId.get(cur), curFire = isFire(curE);
-      const fireList = sortGalaxies(filtered.filter(e => (e.simKey || (isFire(e) ? "fire2" : "tng50")) === "fire2"), sort.key, sort.dir);
-      const tngList = sortGalaxies(filtered.filter(e => (e.simKey || (isFire(e) ? "fire2" : "tng50")) === "tng50"), sort.key, sort.dir);
-      const groups = curFire
-        ? [["FIRE-2 zoom-in halos", fireList], ["TNG50-1 Milky Way and M31 analogues", tngList]]
-        : [["FIRE-2 zoom-in halos", fireList], ["TNG50-1 Milky Way and M31 analogues", tngList]];
+      const curE = opts.index.byId.get(cur), curSk = curE ? inferSimKey(curE) : (activeSimKeys[0] || "rtml");
+      const order = [curSk, ...activeSimKeys.filter(sk => sk !== curSk)];
+      const groups = order.map(sk => [
+        SIM_META[sk]?.groupTitle || sk,
+        sortGalaxies(filtered.filter(e => inferSimKey(e) === sk), sort.key, sort.dir)
+      ]);
       view = groups.flatMap(([, g]) => g);
       if (hl >= shown().length) hl = shown().length - 1;
       let idx = 0;
@@ -318,12 +419,13 @@ export function createGalaxyPicker(els, opts) {
   }
   function setSort(key) { sort = sort.key === key ? {key, dir: -sort.dir} : {key, dir: key === "id" ? 1 : -1}; hl = -1; render(); }
   function setSim(s) {
-    simFilter = ["all", "tng50", "fire2"].includes(s) ? s : "all";
-    if (simBar) for (const r of simBar.querySelectorAll('input[name="gxy-sim"]')) r.checked = r.value === simFilter;
+    const k = s === "all" ? "all" : (normSimKey(s) || s);
+    simFilter = (k === "all" || SIM_ORDER.includes(k)) ? k : "all";
+    if (simBar) simBar.value = simFilter;
     hl = -1; render();
   }
   function clear() { els.search.value = ""; els.filter.value = "all"; setSim("all"); els.search.focus(); }
-  if (simBar) simBar.addEventListener("change", ev => { if (ev.target && ev.target.name === "gxy-sim") setSim(ev.target.value); });
+  if (simBar) simBar.addEventListener("change", ev => { if (ev.target) setSim(ev.target.value); });
   els.head.addEventListener("click", ev => { const b = ev.target.closest("[data-sort]"); if (b) setSort(b.dataset.sort); });
   els.list.addEventListener("click", ev => { if (ev.target.closest('[data-act="clear"]')) { setTimeout(clear); return; }
     const li = ev.target.closest("li[data-id]"); if (li) opts.onPick(normId(li.dataset.id)); });
