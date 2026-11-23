@@ -1,7 +1,7 @@
 // Instrument and velocity controls of the TNG50 explorer (Phase-3 design §6.1, §6.3, brief C1, C2, C4): one log R
 // slider per band present in the selected ions (#R-<band>-0, and #R-<band>-1 in the 2 R and 2x2 layouts), the S/N
 // sliders #sn-0 and #sn-1 (log, integers 2 to 100) and the half-window #vhw (log, 10 km/s to vmax).
-import {bandsOf, twoR, twoSN, rToT, tToR, snStops, snToT, vToT, tToV, SLIDER_MAX, fmtR} from "./state.js?v=20261123c";
+import {bandsOf, twoR, twoSN, rToT, tToR, snStops, snToT, vToT, tToV, SLIDER_MAX, fmtR} from "./state.js?v=20261123d";
 
 /* one line of help per R slider; the EUV band says it is seen only redshifted (its band note) */
 function rTip(key, B, k) {

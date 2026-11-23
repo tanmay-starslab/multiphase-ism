@@ -6,9 +6,9 @@
    Nothing is fetched until the user asks (the model only on "Load local model"); history lives in memory only.
    Pure helpers are exported for the node tests (tests/js/chat_*.mjs); mount() is the only DOM entry point.
    MIT licence (see the repository LICENSE). */
-import {isLowerLimit, limitLogN} from "./state.js?v=20261123c";
-import {sortGalaxies, matchGalaxy, srcOf, galaxySummary} from "./galaxies.js?v=20261123c";
-import {sfx} from "./uisound.js?v=20261123c";
+import {isLowerLimit, limitLogN} from "./state.js?v=20261123d";
+import {sortGalaxies, matchGalaxy, srcOf, galaxySummary} from "./galaxies.js?v=20261123d";
+import {sfx} from "./uisound.js?v=20261123d";
 
 export const WEBLLM_VERSION = "0.2.85";
 /* Third-party code for the local model is pinned AND hash-checked (Subresource Integrity), in the page and in the worker:
@@ -336,7 +336,7 @@ export function chipLabel(name, args) {
 
 /* `app` = window.tngApp (§7.1). `opts.loadSearch()` -> search.js module (default: dynamic import). */
 export function createToolExecutor(app, opts = {}) {
-  const loadSearch = opts.loadSearch || (() => import("./search.js?v=20261123c"));
+  const loadSearch = opts.loadSearch || (() => import("./search.js?v=20261123d"));
   const submitted = opts.onSubmitted || (() => {});
   const H = {
     async set_instrument(a) {

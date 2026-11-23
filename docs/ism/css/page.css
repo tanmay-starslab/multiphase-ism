@@ -629,21 +629,21 @@ html[data-tier=low] *,html[data-tier=low] *::before,html[data-tier=low] *::after
 #top #top-sim .scnt{font:500 10px/1 var(--mono);padding:2px 5px;border-radius:99px;background:rgba(127,138,180,.16);color:var(--muted)}
 #top #top-sim .chev{width:11px;height:11px;color:var(--muted);flex:none;transition:transform .2s}
 #top #top-sim[aria-expanded=true] .chev{transform:rotate(180deg);color:var(--ink)}
-#sim-pop{width:348px;max-width:min(348px,calc(calc(100 * var(--vw, 1vw)) - 20px));padding:10px}
+#sim-pop{width:min(460px,calc(100vw - 24px));max-width:min(460px,calc(calc(100 * var(--vw, 1vw)) - 24px));padding:12px}
 #sim-pop .sim-hd{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 8px;margin-bottom:6px;border-bottom:1px solid var(--mat-edge-c,var(--gline));font:600 11px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
 #sim-pop .sim-hd b{font:500 10.5px var(--mono);padding:2px 7px;border-radius:99px;background:var(--hl);color:var(--accent);text-transform:none;letter-spacing:0}
-#sim-pop .sim-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#sim-pop .sim-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
 @media (max-width:420px){#sim-pop .sim-grid{grid-template-columns:1fr}}
-#sim-pop .sim-opt{display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:8px 10px;border:1px solid var(--mat-edge-c,var(--gline));border-radius:10px;background:var(--mat-tint);color:var(--ink);text-align:left;cursor:pointer;transition:transform .16s,box-shadow .16s,border-color .16s,background .16s}
+#sim-pop .sim-opt{display:flex;flex-direction:column;align-items:stretch;min-width:0;overflow:hidden;gap:3px;padding:8px 10px;border:1px solid var(--mat-edge-c,var(--gline));border-radius:10px;background:var(--mat-tint);color:var(--ink);text-align:left;cursor:pointer;transition:transform .16s,box-shadow .16s,border-color .16s,background .16s}
 #sim-pop .sim-opt:hover{background:var(--mat-raised);border-color:var(--accent);transform:translateY(-1px)}
 #sim-pop .sim-opt.on,#sim-pop .sim-opt[aria-selected=true]{border-color:var(--accent);
   background:radial-gradient(120% 70% at 50% 0%,rgba(255,255,255,.24),rgba(255,255,255,0) 62%),
     radial-gradient(90% 60% at 50% 115%,var(--accent-glow),transparent 70%),var(--mat-raised);
   box-shadow:var(--mat-highlight),inset 0 0 0 1px var(--accent),0 4px 12px rgba(0,0,0,.20)}
 #sim-pop .sim-opt:not(.on) .sdot{background:var(--muted);box-shadow:none;opacity:.55}
-#sim-pop .so-top{display:flex;align-items:center;gap:6px}
-#sim-pop .so-name{font:600 12.5px var(--sans);color:var(--ink)}
-#sim-pop .so-cnt{margin-left:auto;font:500 10.5px var(--mono);padding:1px 6px;border-radius:99px;background:rgba(127,138,180,.15);color:var(--muted)}
+#sim-pop .so-top{display:flex;align-items:center;gap:6px;min-width:0}
+#sim-pop .so-name{font:600 12.5px var(--sans);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#sim-pop .so-cnt{margin-left:auto;flex:none;font:500 10.5px var(--mono);padding:1px 6px;border-radius:99px;background:rgba(127,138,180,.15);color:var(--muted)}
 #sim-pop .sim-opt.on .so-cnt{background:var(--hl);color:var(--accent)}
 #sim-pop .so-sub{font:400 10.5px var(--sans);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (prefers-color-scheme:light){:root:not([data-theme="dark"]) #top #top-sim,:root:not([data-theme="dark"]) #sim-pop .sim-opt.on{

@@ -14,7 +14,7 @@
 // clear sent while a fit runs takes effect before the next one starts. Finished results are kept in an LRU of
 // FIT_PARAMS.cacheSize entries keyed by cacheKey(req); a repeated request is answered from it without refitting.
 // Result arrays are copied before they are transferred, so the cached copy stays intact.
-import {fitPanel, cacheKey, FIT_PARAMS} from "./fit.js?v=20261123c";
+import {fitPanel, cacheKey, FIT_PARAMS} from "./fit.js?v=20261123d";
 
 const cache = new Map();                 // insertion order = LRU order (oldest first)
 const queue = [];
