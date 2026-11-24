@@ -43,3 +43,4 @@ jobs:
           node tests/js/tips_unit.mjs
           node tests/js/uisound_unit.mjs
           node tests/js/smooth_cube.mjs
+          node tests/js/cloudy_emissivity_unit.mjs

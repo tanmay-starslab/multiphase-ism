@@ -32,8 +32,9 @@ uniform float uPxAng, uAccW, uStarSat; uniform vec2 uLodC, uNear;
 uniform float uVolK, uVolGain, uStarFloor, uGasW; uniform vec2 uOccRange; uniform int uCompMode;
 uniform sampler3D uVel0, uVel1, uVel2; uniform vec3 uVelHave; uniform float uVelV; uniform int uVq; uniform vec2 uWWin;
 uniform sampler2D uTF; uniform int uTFOn, uTF2D, uTFW; uniform vec2 uTFWin; uniform float uShade, uGradMax, uGamma, uWRef;
+uniform sampler3D uEmisLut; uniform int uEmisOn; uniform vec2 uZRange, uEmisT, uEmisZ, uEmisNH, uEmisEps; uniform vec3 uEmisDim; uniform float uEmisDimZ;
 in vec3 vPos; out vec4 fragColor;
-const float LOG2_10 = 3.321928094887362, LOG10_CM_PER_KPC = 21.489350545189;
+const float LOG2_10 = 3.321928094887362, LOG10_CM_PER_KPC = 21.489350545189, EMIS_EPS_REF = -25.0, EMIS_LOG10_4PI_ARCSEC2 = 11.7280614585;
 
 float dec(float q, vec2 r) { return q < 0.5 ? 0.0 : exp2(LOG2_10 * (r.x + (q - 1.0) * (r.y - r.x) / 254.0)); }
 vec3 dec3(vec3 q, vec2 r) { return vec3(dec(q.r, r), dec(q.g, r), dec(q.b, r)); }
@@ -116,6 +117,21 @@ vec4 velAt(vec3 p, int l) {
   return vec4(-uVelV + (r.rgb - 1.0) * (2.0 * uVelV / 254.0), r.a); }
 vec4 velVal(vec3 p, int l) { vec4 v = velAt(p, l); float f = hv(uVelHave, l);
   if (f < 0.999) { int c = pick(uVelHave, p, l); v = mix(c >= 0 ? velAt(p, c) : vec4(0.0), v, f); } return v; }
+/* CLOUDY c17.03 emission mode: Z cube reuses uVel0..2 (RedFormat) while uVel is idle, and uEmisLut holds the 3D (T, Z, nH) line table */
+float zAt(vec3 p, int l) {
+  if (l == 0 && length(p) > uMask0) return 0.0;
+  float h = hl(l);
+  if (uExact == 1) return l == 0 ? exact1(uVel0, p, h, uZRange) : l == 1 ? exact1(uVel1, p, h, uZRange) : exact1(uVel2, p, h, uZRange);
+  return l == 0 ? fast1(uVel0, p, h, uZRange) : l == 1 ? fast1(uVel1, p, h, uZRange) : fast1(uVel2, p, h, uZRange); }
+float zVal(vec3 p, int l) { float v = zAt(p, l), f = hv(uVelHave, l);
+  if (f < 0.999) { int c = pick(uVelHave, p, l); v = mix(c >= 0 ? zAt(p, c) : 0.0, v, f); } return v; }
+float cloudyLogEps(float lognH, float logZ, float logT) {
+  vec3 uvw = (vec3(
+    clamp((logT - uEmisT.x) / max(uEmisT.y - uEmisT.x, 1e-6), 0.0, 1.0) * (uEmisDim.x - 1.0) + 0.5,
+    clamp((logZ - uEmisZ.x) / max(uEmisZ.y - uEmisZ.x, 1e-6), 0.0, 1.0) * (uEmisDim.y - 1.0) + 0.5,
+    clamp((lognH - uEmisNH.x) / max(uEmisNH.y - uEmisNH.x, 1e-6), 0.0, 1.0) * (uEmisDim.z - 1.0) + 0.5
+  )) / uEmisDim;
+  return mix(uEmisEps.x, uEmisEps.y, texture(uEmisLut, uvw).r); }
 /* the view of one sample (uVq 1 v_los, 2 v_r, 3 v_phi, 4 |v|, 5 σ_los: dot(v, d) here, its moment 2 along the ray at the end).
    Disk frame: ẑ = Lhat, d = the camera ray direction, so v_los > 0 moves away from the camera (redshift) */
 float velQ(vec3 v, vec3 p, vec3 d) {
@@ -199,8 +215,11 @@ void main() {
     float ta = bp[s], tl = bp[s + 1] - ta; if (tl <= 1e-7 * uHalf.x) continue;
     vec3 pm = o + d * (ta + 0.5 * tl);
     int lg = gasOn ? pick(gHave, pm, 3) : -1, lw = (weighted || tfW || emisMode) ? pick(uWHave, pm, 3) : -1, ls = starOn ? pick(uStarHave, pm, 3) : -1;
+    int lz = emisMode ? pick(uVelHave, pm, 3) : -1;
     float fp = uPxAng * max(length(o), 1e-4 * uHalf.x), mg = 1.0, mw = 1.0, ms = 1.0; int cg = -1, cw = -1, cs = -1;
+    float mz = 1.0; int cz = -1;
     lg = lodLevel(gHave, pm, lg, fp, uLodC.x, cg, mg); lw = lodLevel(uWHave, pm, lw, fp, uLodC.x, cw, mw);
+    lz = lodLevel(uVelHave, pm, lz, fp, uLodC.x, cz, mz);
     ls = lodLevel(uStarHave, pm, ls, fp, uLodC.y, cs, ms);
     bool doGas = lg >= 0 && !(uMode == 1 && A > 0.99);
     if (!doGas && ls < 0) continue;
@@ -227,8 +246,18 @@ void main() {
           if (weighted) { float w = lw >= 0 ? wVal(p, lw) : 0.0; if (lw >= 0 && cw >= 0) w = mix(wVal(p, cw), w, mw); num += w * v * hw; den += w * hw; }
           else sumG += v * hw;
         } else if (emisMode) {
-          float w = lw >= 0 ? wVal(p, lw) : v; if (lw >= 0 && cw >= 0) w = mix(wVal(p, cw), w, mw);
-          sumG += w * v * hw;
+          if (uEmisOn == 1 && v > 0.0 && lw >= 0) {
+            float tv = wVal(p, lw); if (cw >= 0) tv = mix(wVal(p, cw), tv, mw);
+            if (tv > 0.0) {
+              float zv = lz >= 0 ? zVal(p, lz) : 0.0; if (lz >= 0 && cz >= 0) zv = mix(zVal(p, cz), zv, mz);
+              float lognH = log2(v) / LOG2_10, logT = log2(tv) / LOG2_10, logZ = zv > 0.0 ? log2(zv) / LOG2_10 : 0.0;
+              float logEps = cloudyLogEps(lognH, logZ, logT);
+              sumG += exp2(LOG2_10 * (logEps - EMIS_EPS_REF)) * hw;
+            }
+          } else if (uEmisOn == 0) {
+            float w = lw >= 0 ? wVal(p, lw) : v; if (lw >= 0 && cw >= 0) w = mix(wVal(p, cw), w, mw);
+            sumG += w * v * hw;
+          }
         } else if (tfMode) {
           /* THOR: C = ∫ c μ exp(−∫ μ) ds, front to back. Per step μ = kappa alpha_TF (kappa = uVolK opacity² per kpc,
              as the ramp's kappa x²), opacity a = 1 − exp(−μ h) (= μ h for thin steps), emission (1 − A) a c W with W the
@@ -268,7 +297,9 @@ void main() {
       float lc = den > 0.0 ? log2(den) / LOG2_10 + LOG10_CM_PER_KPC : -1e30;
       gas = mix(uBg, lutc((qv - uWin.x) / span), smoothstep(uWWin.x - max(uFadeDex, 1e-3), uWWin.x, lc));
     } else {
-      float lv = weighted ? (den > 0.0 && num > 0.0 ? log2(num / den) / LOG2_10 : -1e30) : (sumG > 0.0 ? log2(sumG) / LOG2_10 + LOG10_CM_PER_KPC : -1e30);
+      float lv = weighted ? (den > 0.0 && num > 0.0 ? log2(num / den) / LOG2_10 : -1e30)
+        : (emisMode && uEmisOn == 1) ? (sumG > 0.0 ? EMIS_EPS_REF + log2(sumG) / LOG2_10 + LOG10_CM_PER_KPC - EMIS_LOG10_4PI_ARCSEC2 - uEmisDimZ : -1e30)
+        : (sumG > 0.0 ? log2(sumG) / LOG2_10 + LOG10_CM_PER_KPC : -1e30);
       float x = (lv - uWin.x) / span;
       /* tune1: columns below the window fade from LUT(0) into the background over uFadeDex dex (soft floor), so
          empty / masked regions (Σ = 0) leave no silhouette and sparse regions have no hard staircase edge */
@@ -331,7 +362,10 @@ export function makeMaterial(T, opts = {}) {
        the view (0 = none), and the weight's log window (column floor in integral mode, volume window in volume mode) */
     uVel0: u(e4), uVel1: u(e4), uVel2: u(e4), uVelHave: u(V3(0, 0, 0)), uVelV: u(1), uVq: u(0), uWWin: u(V2(0, 1)),
     /* TF volume mode (tf.js; the 14th texture unit): off by default, so every other mode is unchanged */
-    uTF: u(tfTex), uTFOn: u(0), uTFWin: u(V2(0, 1)), uTF2D: u(0), uShade: u(0), uGradMax: u(0.5), uTFW: u(0), uGamma: u(0), uWRef: u(0)};
+    uTF: u(tfTex), uTFOn: u(0), uTFWin: u(V2(0, 1)), uTF2D: u(0), uShade: u(0), uGradMax: u(0.5), uTFW: u(0), uGamma: u(0), uWRef: u(0),
+    /* CLOUDY c17.03 line emissivity LUT (15th texture unit): active only when uMode == 2 and uEmisOn == 1 */
+    uEmisLut: u(e1), uEmisOn: u(0), uZRange: u(V2(-3, 1)), uEmisT: u(V2(3, 9)), uEmisZ: u(V2(-3, 1)),
+    uEmisNH: u(V2(-7, 4)), uEmisDim: u(V3(61, 6, 56)), uEmisEps: u(V2(-48, -12)), uEmisDimZ: u(0)};
   const mat = new T.ShaderMaterial({glslVersion: T.GLSL3, vertexShader: VERT, fragmentShader: FRAG, uniforms,
     side: T.BackSide, transparent: true, depthWrite: false, depthTest: false,
     /* tune2: the refine frames blend into the accumulation target with weight uAccW (running mean) */

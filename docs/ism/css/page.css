@@ -855,3 +855,7 @@ html.lmbg-fallback[data-theme="light"] body[data-tab="3d"],html.lmbg-fallback[da
   #v3d-controls>.v3c{padding-top:0;gap:8px}
   #v3d-controls .v3c-tabs span{height:34px}
 }
+
+/* CLOUDY c17.03 line emission selector & legend badge */
+#v3-emis-row[hidden]{display:none}
+.v3d-leg .v3d-badge{font:600 9.5px/1.2 var(--mono,ui-monospace,monospace);letter-spacing:.03em;padding:1px 5px;border-radius:4px;border:1px solid var(--s-edge);background:rgba(255,255,255,.08);color:var(--s-ink2);white-space:nowrap}
