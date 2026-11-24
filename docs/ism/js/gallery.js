@@ -5,7 +5,7 @@
 // catalogue and gets the picked id back.
 // ux4 B: sightlines are shown by their parameters (orientation glyph and word, b, Φ; custom rays by length and b); the
 // id is secondary (row end, the bar button's tip, the copy button and the URL). sightLabel() is shared with the top-bar button.
-import {fmtNum} from "./state.js?v=20261123f";
+import {fmtNum} from "./state.js?v=20261124a";
 
 const MAX_ROWS = 300;
 const esc = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));

@@ -3,7 +3,7 @@
 // the optional intrinsic overlay and the on-the-fly fit (model, component profiles, ticks), pan and zoom (drag,
 // arrow keys, ctrl/cmd+wheel, + and -, Home), the hover readout, and one absolutely positioned hit box per panel.
 // The page (app.js) owns the state; this module only reads it through `P` (the provider) and reports view changes.
-import {casesFor, minus, nf, fitLoose, pixelRatio} from "./state.js?v=20261123f";
+import {casesFor, minus, nf, fitLoose, pixelRatio} from "./state.js?v=20261124a";
 
 const STRIP_H = 48;                                     // #vaxis height (css)
 const LBL_FONT = "600 11px", HDR = 20, PAD_L = 24, PAD_R = 6, AXIS_H = 30, GAP_X = 16, GAP_Y = 12, MIN_ROW = 66, MAX_ROW = 240;
