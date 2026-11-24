@@ -15,9 +15,9 @@
 //   editor.state                       a copy of the shown state;  editor.select(i) selects band i (-1: the ramp)
 // The ramp (Default ramp, Clouds) is an editable item like a band: two handles on the canvas (low end, high end at its
 // opacity), the alpha and gradient rows act on it while it is selected, and remove drops it.
-import {buildTF, wPos, posW, fmtW, W_MIN, W_MAX, PRESETS, PRESET_LABELS, MAX_BANDS, TF_W, TF_H, THOR_NOTE, NELSON16_NOTE} from "./tf.js?v=20261123f";
-import {pixelRatio} from "./state.js?v=20261123f";
-import {sfx} from "./uisound.js?v=20261123f";
+import {buildTF, wPos, posW, fmtW, W_MIN, W_MAX, PRESETS, PRESET_LABELS, MAX_BANDS, TF_W, TF_H, THOR_NOTE, NELSON16_NOTE} from "./tf.js?v=20261124a";
+import {pixelRatio} from "./state.js?v=20261124a";
+import {sfx} from "./uisound.js?v=20261124a";
 
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const r3 = x => Math.round(x * 1000) / 1000;

@@ -10,7 +10,7 @@
 //   7 loading feedback: a thin running bar on the spectra while a sightline loads
 // The pure parts (createHistory, keyAction, pickRandom, csvCell, spectraCSV, fitCSV) need no DOM and are node-tested in
 // tests/js/features_unit.mjs.
-import {sfx} from "./uisound.js?v=20261123f";   /* copy and random echo a cue when sounds are on */
+import {sfx} from "./uisound.js?v=20261124a";   /* copy and random echo a cue when sounds are on */
 
 /* ---------------- pure parts ---------------- */
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);

@@ -4,13 +4,155 @@
 import {
   initFastVizWasm, wasmReady, wasm_cast_cube_ray, wasm_synthesize_voigt_12ions,
   wasm_decode_lut_volume, wasm_pack_velocity
-} from "./fast_viz_wasm.js?v=20261123f";
+} from "./fast_viz_wasm.js?v=20261124a";
 export {initFastVizWasm, wasm_cast_cube_ray, wasm_synthesize_voigt_12ions, wasm_decode_lut_volume};
 export const SCHEMA = "tng50-viz/2";
 /* Phase 3: the gas fields are nH, T, Z plus the 12 registry ions in ladder order (tngsight.vizpack.VOL_KEYS) */
 export const ION_KEYS = ["HI", "MgII", "SiII", "CII", "SiIII", "CIII", "SiIV", "CIV", "NV", "OVI", "NeVIII", "OVII"];
 export const GAS_KEYS = ["nH", "T", "Z"];
 export const VOL_KEYS = [...GAS_KEYS, ...ION_KEYS];
+/* Zero-storage TEMET multiphase ISM thermodynamic fields derived on-the-fly from nH, T, Z and (vx, vy, vz) */
+export const DERIVED_KEYS = ["Pth", "K", "EM", "tcool", "Mach"];
+export const DERIVED_META = {
+  Pth: {
+    key: "Pth", label: "Pth", html: "P<sub>th</sub>", spoken: "thermal pressure",
+    long: "ISM thermal pressure Pth / kB = 2.3 nH T",
+    units: "K cm^-3", kind: "mass_weighted", cmap: "inferno",
+    vmin: 1.0, vmax: 8.0, proj: {kind: "weighted_mean", weight: "nH", units: "K cm^-3", vmin: 2.5, vmax: 6.0},
+    vol_window: [3.0, 6.5], deps: ["nH", "T"]
+  },
+  K: {
+    key: "K", label: "K", html: "K", spoken: "adiabatic entropy",
+    long: "adiabatic entropy kB T / (1.16 nH)^(2/3)",
+    units: "keV cm^2", kind: "mass_weighted", cmap: "viridis",
+    vmin: -6.0, vmax: 2.0, proj: {kind: "weighted_mean", weight: "nH", units: "keV cm^2", vmin: -4.5, vmax: 1.0},
+    vol_window: [-3.5, 1.0], deps: ["nH", "T"]
+  },
+  EM: {
+    key: "EM", label: "EM", html: "EM", spoken: "emission measure",
+    long: "cooling emission measure nH^2 T^(1/2)",
+    units: "cm^-6 K^1/2", kind: "mass_weighted", cmap: "magma",
+    vmin: -2.5, vmax: 7.5, proj: {kind: "weighted_mean", weight: "nH", units: "cm^-6 K^1/2", vmin: -1.5, vmax: 4.5},
+    vol_window: [-0.5, 5.0], deps: ["nH", "T"]
+  },
+  tcool: {
+    key: "tcool", label: "tcool", html: "t<sub>cool</sub>", spoken: "cooling time",
+    long: "radiative cooling time tcool",
+    units: "Myr", kind: "mass_weighted", cmap: "tng_ice",
+    vmin: -4.0, vmax: 4.5, proj: {kind: "weighted_mean", weight: "nH", units: "Myr", vmin: -2.5, vmax: 3.0},
+    vol_window: [-2.5, 2.5], deps: ["nH", "T", "Z"]
+  },
+  Mach: {
+    key: "Mach", label: "Mach", html: "Mach", spoken: "turbulent Mach number",
+    long: "turbulent Mach number |v| / cs(T)",
+    units: "", kind: "mass_weighted", cmap: "tng_dusk",
+    vmin: -2.0, vmax: 2.0, proj: {kind: "weighted_mean", weight: "nH", units: "", vmin: -1.2, vmax: 1.4},
+    vol_window: [-1.0, 1.5], deps: ["T", "vx", "vy", "vz"]
+  }
+};
+const LOG10_PTH_FAC = Math.log10(2.3);
+const LOG10_K_OFF = Math.log10(8.617333262e-8) - (2 / 3) * Math.log10(1.16);
+const LOG10_TCOOL_FAC = Math.log10((3.45 * 1.380649e-16) / 3.15576e13);   // 3/2 * 2.3 * kB / (1 Myr in s)
+const LOG10_CS_COEF = Math.log10(0.1501);   // cs(T) = 0.1501 * sqrt(T) km/s (gamma = 5/3, mu = 0.61)
+
+/* Smooth multiphase ISM CIE cooling function Lambda(T, Z) [erg cm^3 s^-1] (Sutherland & Dopita 1993 / Wiersma+09) */
+export function coolingLambda(logT, logZ = 0) {
+  const Z = Math.min(10, Math.max(1e-4, 10 ** logZ));
+  const hPeak = 1.1e-22 * Math.exp(-(((logT - 4.2) / 0.28) ** 2));
+  const hePeak = 4.5e-23 * Math.exp(-(((logT - 4.85) / 0.35) ** 2));
+  const metPeak = 5.0e-22 * Z * Math.exp(-(((logT - 5.2) / 0.55) ** 2));
+  const fePeak = 6.0e-23 * Z * Math.exp(-(((logT - 6.0) / 0.45) ** 2));
+  const brem = 1.4e-27 * (10 ** (0.5 * logT));
+  const lowT = 3.0e-26 * Z * (10 ** (0.8 * (logT - 2.5))) / (1 + Math.exp(6 * (logT - 4.0)));
+  return Math.max(1e-28, hPeak + hePeak + metPeak + fePeak + brem + lowT);
+}
+
+export function derivedAvailable(key, manifest) {
+  const m = DERIVED_META[key], F = manifest?.gas?.fields;
+  if (!m || !F) return false;
+  return m.deps.every(d => !!F[d]?.cubes);
+}
+
+export function derivedList(manifest) {
+  return DERIVED_KEYS.map(k => {
+    const m = DERIVED_META[k], ok = derivedAvailable(k, manifest);
+    return {...m, group: "thermo", color: null, color_dark: null, available: ok,
+      reason: ok ? "" : !manifest ? "no 3D data in this build" : `requires ${m.deps.join(", ")} cubes`};
+  });
+}
+
+export function derivedFieldSpec(key, manifest) {
+  const m = DERIVED_META[key];
+  if (!m || !derivedAvailable(key, manifest)) return null;
+  const F = manifest.gas.fields, cubes = {};
+  for (const L of (manifest.gas.levels || [])) {
+    if (!m.deps.every(d => F[d]?.cubes?.[L])) continue;
+    const n = manifest.levels?.[L]?.n || 256;
+    cubes[L] = {vmin: m.vmin, vmax: m.vmax, raw_bytes: n * n * n, webp: {bytes: [0, 0, 0, 0]}};
+  }
+  return {label: m.label, units: m.units, kind: m.kind, vmin: m.vmin, vmax: m.vmax, cmap: m.cmap,
+    proj: {...m.proj}, vol_window: [...m.vol_window], deps: [...m.deps], derived: true, cubes};
+}
+
+/* Compute a zero-storage log10-u8 cube for a derived TEMET ISM field from its raw Uint8Array dependency cubes */
+export function computeDerivedCube(key, inputs, manifest) {
+  const m = DERIVED_META[key];
+  if (!m) throw new Error(`unknown derived field ${key}`);
+  const F = manifest?.gas?.fields || {};
+  for (const d of m.deps) {
+    if (!(inputs?.[d] instanceof Uint8Array)) throw new Error(`computeDerivedCube(${key}): missing ${d} cube`);
+    if (!F[d]) throw new Error(`computeDerivedCube(${key}): missing ${d} manifest metadata`);
+  }
+  const N = inputs[m.deps[0]].length, out = new Uint8Array(N);
+  const vmin = m.vmin, invSpan = 254 / (m.vmax - vmin);
+  const mkLut = d => {
+    const lo = F[d].vmin, s = (F[d].vmax - lo) / 254, a = new Float32Array(256);
+    for (let q = 1; q < 256; q++) a[q] = lo + (q - 1) * s;
+    return a;
+  };
+  if (key === "Pth" || key === "K" || key === "EM") {
+    const qN = inputs.nH, qT = inputs.T, lN = mkLut("nH"), lT = mkLut("T");
+    for (let i = 0; i < N; i++) {
+      const a = qN[i], b = qT[i]; if (!a || !b) continue;
+      const val = key === "Pth" ? lN[a] + lT[b] + LOG10_PTH_FAC
+        : key === "K" ? lT[b] - (2 / 3) * lN[a] + LOG10_K_OFF
+        : 2 * lN[a] + 0.5 * lT[b];
+      const q = Math.round((val - vmin) * invSpan) + 1;
+      out[i] = q < 1 ? 1 : q > 255 ? 255 : q;
+    }
+    return out;
+  }
+  if (key === "tcool") {
+    const qN = inputs.nH, qT = inputs.T, qZ = inputs.Z, lN = mkLut("nH"), lT = mkLut("T"), lZ = mkLut("Z");
+    const tz = new Float32Array(65536);
+    for (let t = 1; t < 256; t++) {
+      const lt = lT[t], base = t << 8;
+      for (let z = 1; z < 256; z++) tz[base | z] = LOG10_TCOOL_FAC + lt - Math.log10(coolingLambda(lt, lZ[z]));
+    }
+    for (let i = 0; i < N; i++) {
+      const a = qN[i], b = qT[i], c = qZ[i]; if (!a || !b || !c) continue;
+      const val = tz[(b << 8) | c] - lN[a];
+      const q = Math.round((val - vmin) * invSpan) + 1;
+      out[i] = q < 1 ? 1 : q > 255 ? 255 : q;
+    }
+    return out;
+  }
+  if (key === "Mach") {
+    const qT = inputs.T, qx = inputs.vx, qy = inputs.vy, qz = inputs.vz;
+    const lT = mkLut("T"), lvx = mkLut("vx"), lvy = mkLut("vy"), lvz = mkLut("vz");
+    const lCs = new Float32Array(256);
+    for (let t = 1; t < 256; t++) lCs[t] = LOG10_CS_COEF + 0.5 * lT[t];
+    for (let i = 0; i < N; i++) {
+      const t = qT[i], a = qx[i], b = qy[i], c = qz[i]; if (!t || !a || !b || !c) continue;
+      const vx = lvx[a], vy = lvy[b], vz = lvz[c], v2 = vx * vx + vy * vy + vz * vz;
+      const val = v2 > 1e-12 ? 0.5 * Math.log10(v2) - lCs[t] : vmin;
+      const q = Math.round((val - vmin) * invSpan) + 1;
+      out[i] = q < 1 ? 1 : q > 255 ? 255 : q;
+    }
+    return out;
+  }
+  return out;
+}
 /* Fallback copy of the registry fields the 3D menu needs (tngsight/ions.json: key, ion, label, color, color_dark), used
    only when the page config carries no CFG.ions (a v2 page); tests/js/viz_decode.mjs checks it against ions.json */
 export const ION_FALLBACK = [

@@ -179,6 +179,7 @@ void main() {
   vec3 gHave = velMode ? min(uVelHave, uWHave) : uGasHave;
   bool gasOn = uGasMix > 0.0 && (gHave.x + gHave.y + gHave.z) > 0.0, starOn = uStarMix > 0.0 && (uStarHave.x + uStarHave.y + uStarHave.z) > 0.0;
   bool weighted = !velMode && uKind == 1 && uMode == 0;
+  bool emisMode = !velMode && uMode == 2;
   float num2 = 0.0, wspan = max(uWWin.y - uWWin.x, 1e-6);
   /* TF mode: volume mode of a scalar gas field with the transfer function uTF instead of the fixed ramp; tfW: the
      emissivity weight (uW*, e.g. n_H) scales the emitted colour by (w / 10^uWRef)^uGamma */
@@ -197,7 +198,7 @@ void main() {
   for (int s = 0; s < 5; s++) {
     float ta = bp[s], tl = bp[s + 1] - ta; if (tl <= 1e-7 * uHalf.x) continue;
     vec3 pm = o + d * (ta + 0.5 * tl);
-    int lg = gasOn ? pick(gHave, pm, 3) : -1, lw = (weighted || tfW) ? pick(uWHave, pm, 3) : -1, ls = starOn ? pick(uStarHave, pm, 3) : -1;
+    int lg = gasOn ? pick(gHave, pm, 3) : -1, lw = (weighted || tfW || emisMode) ? pick(uWHave, pm, 3) : -1, ls = starOn ? pick(uStarHave, pm, 3) : -1;
     float fp = uPxAng * max(length(o), 1e-4 * uHalf.x), mg = 1.0, mw = 1.0, ms = 1.0; int cg = -1, cw = -1, cs = -1;
     lg = lodLevel(gHave, pm, lg, fp, uLodC.x, cg, mg); lw = lodLevel(uWHave, pm, lw, fp, uLodC.x, cw, mw);
     ls = lodLevel(uStarHave, pm, ls, fp, uLodC.y, cs, ms);
@@ -225,6 +226,9 @@ void main() {
         if (uMode == 0) {
           if (weighted) { float w = lw >= 0 ? wVal(p, lw) : 0.0; if (lw >= 0 && cw >= 0) w = mix(wVal(p, cw), w, mw); num += w * v * hw; den += w * hw; }
           else sumG += v * hw;
+        } else if (emisMode) {
+          float w = lw >= 0 ? wVal(p, lw) : v; if (lw >= 0 && cw >= 0) w = mix(wVal(p, cw), w, mw);
+          sumG += w * v * hw;
         } else if (tfMode) {
           /* THOR: C = ∫ c μ exp(−∫ μ) ds, front to back. Per step μ = kappa alpha_TF (kappa = uVolK opacity² per kpc,
              as the ramp's kappa x²), opacity a = 1 − exp(−μ h) (= μ h for thin steps), emission (1 − A) a c W with W the

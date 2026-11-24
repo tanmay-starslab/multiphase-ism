@@ -4,7 +4,7 @@
 import {readFileSync} from "node:fs";
 import {join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
-import {GAS_LEVELS, STAR_LEVELS, SMOOTH, STAR_COMP, STAR_ZOOM, validateManifestV2, viewPlan, cubeRef} from "../../docs/ism/js/vizdata.js";
+import {GAS_LEVELS, STAR_LEVELS, SMOOTH, STAR_COMP, STAR_ZOOM, DERIVED_KEYS, DERIVED_META, derivedList, derivedFieldSpec, computeDerivedCube, coolingLambda, decodeU8, encodeLinear, validateManifestV2, viewPlan, cubeRef} from "../../docs/ism/js/vizdata.js";
 import {FRAG} from "../../docs/ism/js/raymarch.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = join(HERE, "../..");
@@ -102,7 +102,49 @@ const M = JSON.parse(readFileSync(join(ROOT, "docs/ism/data/viz/manifest_v2.json
   check(patched.includes("uniform float uDust;") && patched.includes("float starDustAt") &&
         patched.includes("exp(-1.15 * m") && patched.includes("transS = vec3(1.0)") &&
         patched.includes("/* dust patched */") && patched.includes("uGasW * dustT"),
-    "viewer3d.js shader patch anchors match raymarch.js FRAG cleanly without modifying raymarch.js"); }
+    "viewer3d.js shader patch anchors match raymarch.js FRAG cleanly without modifying raymarch.js");
+  /* ---- 5. Zero-storage TEMET thermodynamic fields & 3D Emission mode (uMode == 2) ---- */
+  check(JSON.stringify(DERIVED_KEYS) === JSON.stringify(["Pth", "K", "EM", "tcool", "Mach"]),
+    `DERIVED_KEYS has all 5 TEMET ISM fields: ${DERIVED_KEYS.join(", ")}`);
+  const dList = derivedList(M);
+  check(dList.length === 5 && dList.every(x => x.available && x.group === "thermo"),
+    "derivedList marks all 5 TEMET fields available on RTML_50pc manifest");
+  check(DERIVED_KEYS.every(k => { const sp = derivedFieldSpec(k, M); return sp && sp.derived && sp.cubes.L0 && sp.cubes.L4; }),
+    "derivedFieldSpec builds virtual L0..L4 specs for all 5 TEMET fields with 0 extra storage");
+  // Synthetic 4-voxel cube test for exact thermodynamic formulas
+  const encLog = (vals, f) => {
+    const out = new Uint8Array(vals.length), s = 254 / (f.vmax - f.vmin);
+    vals.forEach((v, i) => { out[i] = Number.isFinite(v) ? Math.max(1, Math.min(255, Math.round((v - f.vmin) * s) + 1)) : 0; });
+    return out;
+  };
+  const nH_log = [NaN, -1.0, 0.0, -2.0], T_log = [NaN, 5.0, 4.0, 6.0], Z_log = [NaN, -0.3, 0.0, -0.5];
+  const vx_lin = [NaN, 30, 60, 0], vy_lin = [NaN, 40, 0, 15], vz_lin = [NaN, 0, 80, 0];
+  const qnH = encLog(nH_log, M.gas.fields.nH), qT = encLog(T_log, M.gas.fields.T), qZ = encLog(Z_log, M.gas.fields.Z);
+  const Vcap = M.gas.fields.vx.vmax;
+  const qvx = encodeLinear(vx_lin, Vcap), qvy = encodeLinear(vy_lin, Vcap), qvz = encodeLinear(vz_lin, Vcap);
+  const decD = (k, q) => decodeU8(q, DERIVED_META[k].vmin, DERIVED_META[k].vmax);
+  const pth = decD("Pth", computeDerivedCube("Pth", {nH: qnH, T: qT}, M));
+  check(Number.isNaN(pth[0]) && Math.abs(pth[1] - (-1 + 5 + Math.log10(2.3))) < 0.05 && Math.abs(pth[2] - (0 + 4 + Math.log10(2.3))) < 0.05,
+    `computeDerivedCube(Pth) matches log10(2.3 nH T) (${pth[1].toFixed(2)}, ${pth[2].toFixed(2)})`);
+  const ent = decD("K", computeDerivedCube("K", {nH: qnH, T: qT}, M));
+  const kExp1 = 5.0 - (2 / 3) * (-1.0) + Math.log10(8.617333262e-8) - (2 / 3) * Math.log10(1.16);
+  check(Number.isNaN(ent[0]) && Math.abs(ent[1] - kExp1) < 0.06,
+    `computeDerivedCube(K) matches log10(kB T[keV] / (1.16 nH)^(2/3)) (${ent[1].toFixed(2)} vs ${kExp1.toFixed(2)})`);
+  const em = decD("EM", computeDerivedCube("EM", {nH: qnH, T: qT}, M));
+  check(Number.isNaN(em[0]) && Math.abs(em[1] - (2 * (-1) + 2.5)) < 0.06 && Math.abs(em[2] - (0 + 2.0)) < 0.06,
+    `computeDerivedCube(EM) matches log10(nH^2 T^1/2) (${em[1].toFixed(2)}, ${em[2].toFixed(2)})`);
+  const tc = decD("tcool", computeDerivedCube("tcool", {nH: qnH, T: qT, Z: qZ}, M));
+  check(Number.isNaN(tc[0]) && coolingLambda(5.2, 0) > coolingLambda(6.5, 0) && tc[1] < tc[3] && tc[1] > -3 && tc[3] < 4,
+    `computeDerivedCube(tcool) gives faster cooling in 10^5 K mixing layer than 10^6 K hot gas (${tc[1].toFixed(2)} vs ${tc[3].toFixed(2)} log Myr)`);
+  const ma = decD("Mach", computeDerivedCube("Mach", {T: qT, vx: qvx, vy: qvy, vz: qvz}, M));
+  const mExp2 = Math.log10(100 / (0.1501 * Math.sqrt(1e4)));   // |v|=100 km/s, cs(10^4 K)=15.01 km/s -> M=6.66
+  check(Number.isNaN(ma[0]) && Math.abs(ma[2] - mExp2) < 0.06 && ma[2] > ma[3],
+    `computeDerivedCube(Mach) distinguishes supersonic cold gas from subsonic hot gas (${ma[2].toFixed(2)} vs ${ma[3].toFixed(2)})`);
+  // Verify Emission mode (uMode == 2) in raymarch.js & viewer3d.js
+  check(FRAG.includes("bool emisMode = !velMode && uMode == 2;") && FRAG.includes("else if (emisMode)") && FRAG.includes("sumG += w * v * hw;"),
+    "raymarch.js FRAG implements uMode == 2 (Emission) integrating nH * n_field * ds");
+  check(vsrc.includes('data-testid="v3-mode-emission"') && vsrc.includes('mode === "emission" ? 2 : 0') && vsrc.includes("derivedTex("),
+    "viewer3d.js exposes Emission mode pill (uMode == 2) and on-the-fly derivedTex builder"); }
 
 console.log(fails ? `\n${fails} check(s) FAILED` : "\nall checks passed");
 process.exit(fails ? 1 : 0);
