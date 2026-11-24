@@ -18,7 +18,7 @@ import path from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)), REPO = path.resolve(HERE, "../..");
-const ROOT = path.join(REPO, "docs/tng50/learn/how-a-spectrum-is-made");
+const ROOT = path.join(REPO, "docs/ism/learn/how-a-spectrum-is-made");
 const imp = p => import(pathToFileURL(path.join(ROOT, p)).href);
 const LC = await imp("js/ui/layoutclass.js"), L = await imp("js/ui/layout.js"), K = await imp("js/ui/kinetic.js");
 const HUD = await imp("js/ui/hud.js"), RAIL = await imp("js/ui/rail.js"), PL = await imp("js/ui/plaque.js");

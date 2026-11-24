@@ -281,7 +281,7 @@ _TNGS = json.loads(TNGS_CASES.read_text())["cases"] if TNGS_CASES.is_file() else
 @pytest.mark.skipif(not _TNGS, reason=f"crafted TNGS fixture missing: {TNGS_CASES}")
 @pytest.mark.parametrize("case", _TNGS, ids=[c["name"] for c in _TNGS])
 def test_decode_web_crafted_v2(case):
-    """Phase-3 Code 4: decode_web accepts or refuses each crafted TNGS v2 blob as docs/tng50/js/fit.js decodeTNGS does
+    """Phase-3 Code 4: decode_web accepts or refuses each crafted TNGS v2 blob as docs/ism/js/fit.js decodeTNGS does
     (tests/js/fit_decode.mjs runs the same blobs; make_fit_fixture.py writes the expected outcomes out by hand)."""
     import base64
     blob = base64.b64decode(case["blob"])

@@ -3,7 +3,7 @@
 //
 //   node tests/js/story_a11y.mjs                        self-test (a11y_*.json fixtures)
 //   node tests/js/story_a11y.mjs --fixture F.json       evaluate one recorded run
-//   TNG_BROWSER=1 node tests/js/story_a11y.mjs [docs/tng50] [--out DIR] [--edge BIN] [--no-stills]
+//   TNG_BROWSER=1 node tests/js/story_a11y.mjs [docs/ism] [--out DIR] [--edge BIN] [--no-stills]
 //   TNG_BROWSER=1 node tests/js/story_a11y.mjs --lite   ?lite=1 on SwiftShader at 960x600 must reach the last beat < 10 min
 //
 // Browser checks (1440x900 and 390x844, prefers-reduced-motion: reduce):
@@ -30,7 +30,7 @@ if (opt.fixture) { const fx = JSON.parse(readFileSync(resolve(opt.fixture), "utf
 selfTest(C, "a11y", fx => evalA11y(fx));
 if (!process.env.TNG_BROWSER) { C.note("browser part skipped (set TNG_BROWSER=1)"); process.exit(C.finish()); }
 
-const DIR = resolve(pos[0] || join(REPO, "docs/tng50")), PAGE = join(DIR, STORY_REL, "index.html"), OUT = opt.out ? resolve(opt.out) : null;
+const DIR = resolve(pos[0] || join(REPO, "docs/ism")), PAGE = join(DIR, STORY_REL, "index.html"), OUT = opt.out ? resolve(opt.out) : null;
 if (!existsSync(PAGE)) { C.check(process.env.STORY_REQUIRE !== "1", `no story page at ${relative(REPO, PAGE)}`); process.exit(C.finish()); }
 if (OUT) mkdirSync(OUT, {recursive: true});
 

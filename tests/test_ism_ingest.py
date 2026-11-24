@@ -75,3 +75,37 @@ def test_byo_simulation_npz_subparsec_ingest(tmp_path: Path):
     dec = L.decode_web(bin_blob)
     assert dec["version"] == 2
     assert len(dec["lines"]) == 12
+
+
+def test_six_ism_regimes_presets_and_stars(tmp_path: Path):
+    """Verify all 6 flagship ISM & sub-ISM regime generators (mixing_layer, cloud_crush, starforge_gmc,
+    superbubble, shattering_mist, ism_kpc) produce finite 18-field gas + 3-band starlight cubes and validate
+    both gas L0..L1 and star S0..S1 cubes in manifest_v2.json."""
+    for preset_key, meta in ING.PRESET_META.items():
+        h_kpc = meta["half_pc"] / 1000.0
+        cube = meta["fn"](32, h_kpc, level_idx=0)
+        for k in ("nH", "T", "Z", "vx", "vy", "vz", "star_i", "star_r", "star_g", *ING.I.KEYS):
+            assert k in cube, f"{preset_key} missing {k}"
+            assert cube[k].shape == (32, 32, 32)
+            assert np.all(np.isfinite(cube[k]))
+
+    # Full end-to-end 2-level ingest test on shattering_mist preset (down to AU scales) with S0..S1 stars+dust
+    out_dir = tmp_path / "shattering_pack"
+    levels = ING.parse_levels("L0,L4", half_pc=5.0, half_kpc=None)
+    res = ING.ingest_dataset(
+        preset="shattering_mist",
+        out_dir=out_dir,
+        levels_half_kpc=levels,
+        n=32,
+        nrays=6,
+        workers=2,
+    )
+    man_path = Path(res["manifest"])
+    man = json.loads(man_path.read_text())
+    VP.validate_manifest_v2(man, base_dir=man_path.parent)
+    assert man["gas"]["levels"] == ["L0", "L4"]
+    assert man["stars"]["levels"] == ["S0", "S4"]
+    assert abs(man["levels"]["L4"]["half_pc"] - 5.0 * (0.25 ** 4)) < 1e-5
+    comp = json.loads((out_dir / "components.json").read_text())
+    assert "aod" in comp and "comp_keys" in comp
+

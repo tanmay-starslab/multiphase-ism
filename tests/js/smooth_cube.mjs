@@ -1,6 +1,6 @@
-// smoothCube (docs/tng50/js/vizdata.js, tune2 display prefilter): column sums are kept, empty stays empty far from
+// smoothCube (docs/ism/js/vizdata.js, tune2 display prefilter): column sums are kept, empty stays empty far from
 // matter, the star (RGBA) path smooths R/G/B independently and sets A from them, and passes = 0 round-trips the bytes.
-import {smoothCube, decodeU8} from "../../docs/tng50/js/vizdata.js";
+import {smoothCube, decodeU8} from "../../docs/ism/js/vizdata.js";
 import {readFileSync} from "node:fs";
 let fails = 0; const check = (ok, msg) => { console.log(`${ok ? "ok  " : "FAIL"} ${msg}`); if (!ok) fails++; };
 const n = 32, N = n ** 3, vmin = -8, vmax = 2;
@@ -20,7 +20,7 @@ const R = new Uint8Array(N); for (let i = 0; i < N; i++) R[i] = o4[4 * i];
 check(okA && g0 && R.every((v, i) => v === o[i]), "RGBA: R equals the single-channel result, empty G stays empty, A = any(RGB)");
 // tf (H I check): the viewer draws every gas field raw (the owner's "original resolution"); only the star cubes keep the
 // prefilter. Read the SMOOTH table and the smoothPasses rule from the viewer source (importing it needs a DOM).
-const src = readFileSync(new URL("../../docs/tng50/js/viewer3d.js", import.meta.url), "utf8");
+const src = readFileSync(new URL("../../docs/ism/js/viewer3d.js", import.meta.url), "utf8");
 const mS = src.match(/^const SMOOTH = (\{[^;]*\});/m), mP = src.match(/^const smoothPasses = (k => [^;]*);/m);
 check(!!mS && !!mP, "viewer3d.js defines SMOOTH and smoothPasses");
 if (mS && mP) { const SMOOTH = Function(`return ${mS[1]}`)(), sp = Function("SMOOTH", "isIon", `return ${mP[1]}`)(SMOOTH, () => true);

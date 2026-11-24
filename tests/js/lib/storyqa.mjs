@@ -25,7 +25,7 @@ import {gzipSync, inflateSync, deflateSync} from "node:zlib";
 import {ROOT as REPO} from "./browser.mjs";
 
 export const STORY_REL = "learn/how-a-spectrum-is-made";
-export const STORY_ROOT = join(REPO, "docs/tng50", STORY_REL);
+export const STORY_ROOT = join(REPO, "docs/ism", STORY_REL);
 export const FIX_DIR = join(REPO, "tests/js/fixtures/story_qa");
 
 /* ---------------------------------------------------------------- matrix and layout classes (§3.3, G1) */
@@ -716,7 +716,7 @@ export function tierIndex(file = TIER_INDEX_DEFAULT, ids = TIER_IDS) {
   for (const e of ix.stories || []) if (ids.includes(e.id)) e.gates = {...(e.gates || {}), all: true, note: "R7 test tree: forced true to reach ?story"};
   return ix;
 }
-/** Temp docs/tng50 tree: ROOT copied (no media/, build/, audio), the rest symlinked; data/index.json replaced. */
+/** Temp docs/ism tree: ROOT copied (no media/, build/, audio), the rest symlinked; data/index.json replaced. */
 export async function tierTree(docs, index, base = null) {
   const fs = await import("node:fs");
   const T = base ? (fs.mkdirSync(base, {recursive: true}), base) : mkdtempSync(join(process.env.TMPDIR || tmpdir(), "r7tier-"));
@@ -778,7 +778,7 @@ async function tierMain(argv) {
   const sets = new Set(String(opt.sets || "node,h0,browser,gpu").split(","));
   const OUT = resolve(opt.out || join(CGM, "scratch/story3_w/R7_gpu/run_" + (opt.pass || "x")));
   fs.mkdirSync(OUT, {recursive: true});
-  const DOCS = resolve(opt.docs || join(REPO, "docs/tng50"));
+  const DOCS = resolve(opt.docs || join(REPO, "docs/ism"));
   const ixFile = resolve(opt.index || TIER_INDEX_DEFAULT), IX = tierIndex(ixFile, ids);
   const byId = Object.fromEntries((IX.stories || []).map(e => [e.id, e]));
   const T0 = Date.now(), log = m => { const s = `[${((Date.now() - T0) / 1000).toFixed(0)} s] ${m}`; console.log(s); fs.appendFileSync(join(OUT, "runner.log"), s + "\n"); };

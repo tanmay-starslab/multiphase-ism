@@ -1,8 +1,8 @@
-// UI sound effects (docs/tng50/js/uisound.js): the state logic with a fake window, storage and uisfx runtime, no browser.
+// UI sound effects (docs/ism/js/uisound.js): the state logic with a fake window, storage and uisfx runtime, no browser.
 // Default off (nothing loaded), persistence under tng.sfx shared by every instance, ?sfx=off, the toggle cues, the
 // hidden-tab and rate-limit guards, ducking (quieter while the music plays) and the vendored runtime's exports.
 // Usage: node tests/js/uisound_unit.mjs
-import {createUISound, KEY, PACK, VOLUME, DUCK, GAP_MS} from "../../docs/tng50/js/uisound.js";
+import {createUISound, KEY, PACK, VOLUME, DUCK, GAP_MS} from "../../docs/ism/js/uisound.js";
 import {checker} from "./lib/browser.mjs";
 
 const C = checker(), check = C.check;
@@ -77,11 +77,11 @@ check(VOLUME > 0 && VOLUME <= 0.5 && DUCK > 0 && DUCK < 1, `volume kept low (${V
   check(Math.abs(R.log.volumes.at(-1) - VOLUME * DUCK) < 1e-12, `ducked cue plays at VOLUME*DUCK (${R.log.volumes.at(-1)})`); }
 
 /* the vendored runtime is a plain ES module with the API the wrapper uses */
-{ const m = await import("../../docs/tng50/vendor/uisfx/uisfx.js");
+{ const m = await import("../../docs/ism/vendor/uisfx/uisfx.js");
   check(typeof m.createUISFX === "function" && m.packNames.includes(PACK), "vendored uisfx exports createUISFX and the glass pack");
   for (const c of ["select", "success", "error", "receive", "toggle-on", "toggle-off", "start", "play", "complete"]) check(m.cueNames.includes(c), `cue ${c} exists`);
   /* every literal cue the pages play (sfx("x"), with ternaries) is a uisfx cue name */
-  const {readdirSync, readFileSync} = await import("node:fs"), dir = new URL("../../docs/tng50/js/", import.meta.url), used = new Set();
+  const {readdirSync, readFileSync} = await import("node:fs"), dir = new URL("../../docs/ism/js/", import.meta.url), used = new Set();
   for (const f of readdirSync(dir).filter(f => f.endsWith(".js"))) for (const call of readFileSync(new URL(f, dir), "utf8").matchAll(/\bsfx\(([^()]*)\)/g))
     for (const q of call[1].matchAll(/"([a-z-]+)"/g)) used.add(q[1]);
   const bad = [...used].filter(c => !m.cueNames.includes(c));

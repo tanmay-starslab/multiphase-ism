@@ -1,8 +1,8 @@
-// Faddeeva/Voigt accuracy of docs/tng50/js/fit.js against scipy.special.wofz (fixture points; design-3 section 8 U_fit 1).
+// Faddeeva/Voigt accuracy of docs/ism/js/fit.js against scipy.special.wofz (fixture points; design-3 section 8 U_fit 1).
 import {readFileSync} from "node:fs";
 import {join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
-import {faddeeva, FIT_PARAMS} from "../../docs/tng50/js/fit.js";
+import {faddeeva, FIT_PARAMS} from "../../docs/ism/js/fit.js";
 
 const fx = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "fixtures", "fit_cases.json"), "utf8"));
 let fails = 0;

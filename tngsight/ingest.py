@@ -41,6 +41,7 @@ from . import deposit as D
 from . import ions as I
 from . import library as L
 from . import scoring as _score
+from . import stars as ST
 from . import vizpack as VP
 from . import volume as V
 
@@ -202,10 +203,17 @@ def _fractal_turbulence_3d(n: int, seed: int = 42, kmin: int = 2, kmax: int = 24
     return vx, vy, vz, sc
 
 
+def _attach_starlight(out: dict[str, np.ndarray], star_i: np.ndarray, star_r: np.ndarray, star_g: np.ndarray) -> dict[str, np.ndarray]:
+    """Attach positive g, r, i stellar/continuum emission density cubes [L_AB0 kpc^-3] to a synthesized level dict."""
+    out["star_i"] = np.clip(star_i, 1e-4, 1e14)
+    out["star_r"] = np.clip(star_r, 1e-4, 1e14)
+    out["star_g"] = np.clip(star_g, 1e-4, 1e14)
+    return out
+
+
 def synthesize_mixing_layer_level(n: int, half_kpc: float, level_idx: int = 0, seed: int = 42) -> dict[str, np.ndarray]:
     """Synthesize a 3D Radiative Turbulent Mixing Layer (Fielding+2020 / Tan+2021 / Ji+2019 / CATS Athena++ style)
-    at physical half-width `half_kpc` (default L0 = 0.025 kpc = 25 pc -> 50 pc box; L1 = 6.25 pc -> 12.5 pc box;
-    L2 = 1.5625 pc -> 3.125 pc box with 2517 AU voxels).
+    at physical half-width `half_kpc` (default L0 = 0.025 kpc = 25 pc -> 50 pc box; L4 = 0.09765 pc -> 40 AU voxels).
     Coordinates:
       x: shear flow direction
       y: spanwise transverse direction
@@ -222,11 +230,12 @@ def synthesize_mixing_layer_level(n: int, half_kpc: float, level_idx: int = 0, s
     lam_kh = 0.75 * H0
     kx1 = 2.0 * np.pi / lam_kh
     ky1 = 2.0 * np.pi / (1.1 * lam_kh)
-    # Primary + secondary KHI wave + fractal corrugation
+    # Primary + secondary KHI wave + fractal corrugation at both H0 and current level scale
     z_int = (
         0.18 * H0 * np.sin(kx1 * X + 0.4 * np.cos(ky1 * Y))
         + 0.09 * H0 * np.cos(2.0 * kx1 * X - 0.8 * ky1 * Y + 0.7)
-        + 0.06 * half_kpc * sc_t
+        + 0.14 * half_kpc * np.sin(2.0 * np.pi * X / (0.8 * half_kpc) + 0.5 * vy_t)
+        + 0.08 * half_kpc * sc_t
     )
     # Overturning KHI vortex roll angle around billow cores
     x_phase = (kx1 * X + np.pi) % (2.0 * np.pi) - np.pi
@@ -235,15 +244,16 @@ def synthesize_mixing_layer_level(n: int, half_kpc: float, level_idx: int = 0, s
     swirl = np.exp(-0.5 * (r_vort / (0.16 * H0)) ** 2) * np.sin(2.0 * theta_vort - 1.4 * np.sin(ky1 * Y))
 
     # Signed normalized coordinate across the fractal interface (-1 = pure cold phase, +1 = pure hot phase)
-    w_layer = (0.14 * H0 + 0.06 * half_kpc * np.abs(sc_t))
-    xi = (Zg - z_int) / np.maximum(w_layer, 1e-6 * H0) - 0.55 * swirl + 0.28 * vz_t
+    w_layer = (0.06 * H0 + 0.12 * half_kpc * (0.5 + 0.5 * np.abs(sc_t)))
+    xi = (Zg - z_int) / np.maximum(w_layer, 1e-6 * H0) - 0.55 * swirl + 0.35 * vz_t
 
     # Entrained cold cloudlets & shattered droplets (Gronke & Oh 2018 "mist" regime) inside the hot wind (Zg > 0)
+    k_drop = 2.0 * np.pi / (0.35 * half_kpc)
     droplet_field = (
-        np.sin(4.5 * kx1 * X + 1.1 * sc_t) * np.cos(4.5 * ky1 * Y + 0.9 * vx_t) * np.sin(4.5 * kx1 * Zg + 0.7 * vy_t)
+        np.sin(k_drop * X + 1.1 * sc_t) * np.cos(k_drop * Y + 0.9 * vx_t) * np.sin(k_drop * Zg + 0.7 * vy_t)
     )
-    is_droplet = (Zg > -0.1 * H0) & (Zg < 0.65 * H0) & (droplet_field > 0.58)
-    xi = np.where(is_droplet, -0.85 - 0.4 * (droplet_field - 0.58), xi)
+    is_droplet = (Zg > -0.25 * half_kpc) & (Zg < 0.85 * half_kpc) & (droplet_field > 0.54)
+    xi = np.where(is_droplet, -0.85 - 0.45 * (droplet_field - 0.54), xi)
 
     # Smooth phase fraction f_hot in [0, 1]
     f_hot = 0.5 * (1.0 + np.tanh(xi))
@@ -267,34 +277,46 @@ def synthesize_mixing_layer_level(n: int, half_kpc: float, level_idx: int = 0, s
     # Cold stream at -20 km/s, hot wind at +140 km/s (Δv = 160 km/s), plus KHI vortex circulation + cooling inflow v_z
     vx = -20.0 + 160.0 * f_hot + 28.0 * f_mix * vx_t - 22.0 * swirl
     vy = 24.0 * (0.3 + 0.7 * f_mix) * vy_t
-    # Radiative cooling inflow from the hot phase into the mixing layer (v_cool ~ -15 to -35 km/s) + KHI vertical eddies
     vz = -18.0 * f_hot * (0.4 + 0.6 * f_mix) + 32.0 * f_mix * vz_t + 25.0 * swirl * np.cos(kx1 * X)
 
     ions = compute_ion_densities(nH, T, Z)
     dx_cm = (2.0 * half_kpc / n) * CM_PER_KPC
     m_vox = nH * (dx_cm ** 3) * (1.4 * M_P) / 1.98847e33  # Msun per voxel
-    return {"nH": nH, "T": T, "Z": Z, **ions, "vx": vx, "vy": vy, "vz": vz, "m": m_vox}
+
+    # Starlight / radiative cooling emission + cold stream stellar background (S0..S4)
+    cool_glow = (nH ** 1.4) * f_mix * np.exp(-0.5 * ((logT - 4.95) / 0.45) ** 2) * 1.5e6
+    cold_stars = (1.0 - f_hot) * (nH ** 1.1) * np.exp(0.5 * sc_t) * 3.5e5
+    star_i = cold_stars * 1.35 + cool_glow * 0.55 + 1.0e2
+    star_r = cold_stars * 1.00 + cool_glow * 1.10 + 1.0e2
+    star_g = cold_stars * 0.70 + cool_glow * 1.65 + 1.0e2
+    out = {"nH": nH, "T": T, "Z": Z, **ions, "vx": vx, "vy": vy, "vz": vz, "m": m_vox}
+    return _attach_starlight(out, star_i, star_r, star_g)
 
 
 def synthesize_ism_kpc_level(n: int, half_kpc: float, level_idx: int = 0, seed: int = 101) -> dict[str, np.ndarray]:
     """Synthesize a 3D Stratified Multiphase ISM & Superbubble Fountain Patch (TIGRESS / SILCC style,
-    L0 = ±0.5 kpc [1 kpc box], L1 = ±0.125 kpc [250 pc box], L2 = ±0.03125 kpc [62.5 pc box])."""
+    L0 = ±0.5 kpc [1 kpc box] down to L4 = ±0.001953 kpc [3.9 pc box, 0.015 pc = 3148 AU voxels])."""
     c = VP.voxel_centers(n, half_kpc)
     X, Y, Zg = np.meshgrid(c, c, c, indexing="ij")
     H0 = half_kpc * (4.0 ** level_idx)
 
     vx_t, vy_t, vz_t, sc_t = _fractal_turbulence_3d(n, seed=seed + 23 * level_idx, kmin=2, kmax=26)
 
-    # Stratified disk scale height h_cold ~ 0.08 * H0, h_warm ~ 0.28 * H0
+    # Stratified disk scale height h_cold ~ 0.08 * H0, h_warm ~ 0.28 * H0 + fine-scale midplane filaments
     z_warp = 0.04 * H0 * np.sin(2.0 * np.pi * X / (1.4 * H0)) * np.cos(2.0 * np.pi * Y / (1.4 * H0))
     z_eff = Zg - z_warp
-    rho_disk = np.exp(-0.5 * (z_eff / (0.11 * H0)) ** 2) + 0.18 * np.exp(-np.abs(z_eff) / (0.32 * H0))
+    rho_disk = (
+        np.exp(-0.5 * (z_eff / (0.11 * H0)) ** 2)
+        + 0.18 * np.exp(-np.abs(z_eff) / (0.32 * H0))
+        + 0.45 * np.exp(-0.5 * (z_eff / (0.30 * half_kpc)) ** 2)
+    )
 
     # Expanding SN superbubble cavities & fountain chimneys punching out of the midplane
     bubbles = [
         (0.0, 0.0, 0.05 * H0, 0.22 * H0, 0.45 * H0, 145.0),
         (-0.22 * H0, 0.18 * H0, -0.06 * H0, 0.17 * H0, 0.38 * H0, -120.0),
         (0.24 * H0, -0.15 * H0, 0.12 * H0, 0.15 * H0, 0.42 * H0, 130.0),
+        (0.08 * half_kpc, -0.06 * half_kpc, 0.04 * half_kpc, 0.42 * half_kpc, 0.68 * half_kpc, 135.0),
     ]
     f_cav = np.zeros_like(X)
     v_out_z = np.zeros_like(X)
@@ -306,7 +328,7 @@ def synthesize_ism_kpc_level(n: int, half_kpc: float, level_idx: int = 0, seed: 
         shell = np.exp(-0.5 * ((r_pert - 1.02) / 0.11) ** 2)
         f_cav = np.maximum(f_cav, cav)
         rho_disk = rho_disk * (1.0 - 0.92 * cav) + 1.8 * shell * np.exp(-np.abs(z_eff) / (0.35 * H0))
-        v_out_z += cav * v_b * np.tanh((Zg - bz) / (0.15 * H0))
+        v_out_z += cav * v_b * np.tanh((Zg - bz) / (0.15 * rx))
         v_out_r += shell * 45.0
 
     # Log-normal turbulent ISM density fluctuations (CNM clumps + WNM filaments)
@@ -324,14 +346,426 @@ def synthesize_ism_kpc_level(n: int, half_kpc: float, level_idx: int = 0, seed: 
     Z = np.clip(0.95 + 0.45 * f_cav + 0.12 * sc_t, 0.25, 2.5)
 
     # Velocity field: galactic shear + turbulent dispersion + bipolar superbubble outflow + fountain fallback
-    vx = -25.0 * (Y / H0) + 18.0 * vx_t + v_out_r * (X / np.maximum(np.hypot(X, Y), 0.05 * H0))
-    vy = 25.0 * (X / H0) + 18.0 * vy_t + v_out_r * (Y / np.maximum(np.hypot(X, Y), 0.05 * H0))
+    vx = -25.0 * (Y / H0) + 18.0 * vx_t + v_out_r * (X / np.maximum(np.hypot(X, Y), 0.05 * half_kpc))
+    vy = 25.0 * (X / H0) + 18.0 * vy_t + v_out_r * (Y / np.maximum(np.hypot(X, Y), 0.05 * half_kpc))
     vz = v_out_z + 16.0 * vz_t - 22.0 * (1.0 - f_cav) * np.sign(Zg) * (np.abs(Zg) / H0)
 
     ions = compute_ion_densities(nH, T, Z)
     dx_cm = (2.0 * half_kpc / n) * CM_PER_KPC
     m_vox = nH * (dx_cm ** 3) * (1.4 * M_P) / 1.98847e33
-    return {"nH": nH, "T": T, "Z": Z, **ions, "vx": vx, "vy": vy, "vz": vz, "m": m_vox}
+
+    # Stratified old stellar disk + young OB associations in dense midplane & superbubble shells
+    old_disk = np.exp(-0.5 * (z_eff / (0.18 * H0)) ** 2) * (1.0 + 0.35 * np.clip(sc_t, -1.0, 2.5)) * 2.5e6
+    young_ob = (nH ** 1.35) * np.exp(-0.5 * (z_eff / (0.28 * half_kpc)) ** 2) * (0.4 + f_shell) * 8.0e5
+    star_i = old_disk * 1.45 + young_ob * 0.55 + 1.0e2
+    star_r = old_disk * 1.05 + young_ob * 1.05 + 1.0e2
+    star_g = old_disk * 0.65 + young_ob * 1.85 + 1.0e2
+    out = {"nH": nH, "T": T, "Z": Z, **ions, "vx": vx, "vy": vy, "vz": vz, "m": m_vox}
+    return _attach_starlight(out, star_i, star_r, star_g)
+
+
+def synthesize_cloud_crush_level(n: int, half_kpc: float, level_idx: int = 0, seed: int = 202) -> dict[str, np.ndarray]:
+    """Synthesize a 3D Radiative Cloud-Crushing & Cometary Tail volume (`CloudCrush_200pc`,
+    Gronke & Oh 2018, 2020; Schneider et al. 2020 Cholla; Abruzzo et al. 2022):
+      - Radiative cold cloud (R_cl = 10 pc, T = 10^4 K, nH = 1.5 cm^-3) entrained and shattering in a supersonic
+        hot galactic wind (T = 3e6 K, nH = 10^-3 cm^-3, v_wind = 350 km/s)
+      - 200 pc cometary radiative tail and Kelvin-Helmholtz mixing sheath zooming 5 nested 256^3 levels from
+        ±100 pc (L0, 0.78 pc vox) -> ±25 pc (L1) -> ±6.25 pc (L2) -> ±1.56 pc (L3) -> ±0.39 pc (L4, 630 AU vox)."""
+    c = VP.voxel_centers(n, half_kpc)
+    X, Y, Zg = np.meshgrid(c, c, c, indexing="ij")
+    H0 = half_kpc * (4.0 ** level_idx)  # L0 = 0.100 kpc = 100 pc
+
+    vx_t, vy_t, vz_t, sc_t = _fractal_turbulence_3d(n, seed=seed + 19 * level_idx, kmin=2, kmax=28)
+
+    # Cloud head centered near x_head = -0.15 * H0, cometary tail extending along +x
+    # At deep zoom (L2..L4), the origin (0, 0, 0) lies right in the shattering core/wake interface!
+    R_cl = 0.12 * H0  # ~12 pc cloud head radius
+    x_head = -0.06 * H0
+    dx_head = X - x_head
+    r_perp = np.hypot(Y, Zg)
+
+    # Cometary tail radius widens gently downstream and warps with KHI helical modes
+    k_wake = 2.0 * np.pi / (0.45 * H0)
+    y_wake = 0.035 * H0 * np.sin(k_wake * X + 0.5 * sc_t) * np.clip((X - x_head) / (0.5 * H0), 0.0, 1.5)
+    z_wake = 0.035 * H0 * np.cos(k_wake * X + 0.5 * vx_t) * np.clip((X - x_head) / (0.5 * H0), 0.0, 1.5)
+    r_tail_perp = np.hypot(Y - y_wake, Zg - z_wake)
+
+    # Head sphere + downstream cometary cylinder/cone (X >= x_head)
+    r_head = np.sqrt((dx_head / R_cl) ** 2 + (r_perp / R_cl) ** 2)
+    r_tail_rad = R_cl * (0.85 + 0.35 * np.clip(dx_head / (0.8 * H0), 0.0, 1.5))
+    r_wake = np.where(dx_head < 0, r_head, r_tail_perp / np.maximum(r_tail_rad, 1e-6))
+
+    # Multi-scale shattered droplets & stripping filaments at current level scale
+    k_sub = 2.0 * np.pi / (0.42 * half_kpc)
+    shatter = (
+        0.35 * sc_t
+        + 0.28 * np.sin(k_sub * X + 0.9 * vx_t) * np.cos(k_sub * Y + 0.9 * vy_t) * np.cos(k_sub * Zg + 0.9 * vz_t)
+    )
+    xi = (r_wake - 1.0 - 0.32 * shatter) / 0.26
+
+    # Embedded shattered cold droplets in the wake and mixing sheath
+    drop_wave = np.sin(1.7 * k_sub * X + sc_t) * np.cos(1.7 * k_sub * Y + vx_t) * np.sin(1.7 * k_sub * Zg + vy_t)
+    is_drop = (r_wake < 1.85) & (dx_head > -0.8 * R_cl) & (drop_wave > 0.48)
+    xi = np.where(is_drop, -0.9 - 0.5 * (drop_wave - 0.48), xi)
+
+    f_hot = 0.5 * (1.0 + np.tanh(xi))
+    f_mix = 4.0 * f_hot * (1.0 - f_hot)
+
+    # Bow shock compression ahead of the cloud head (dx_head < -R_cl)
+    r_bow = np.sqrt(((dx_head + 0.3 * R_cl) / (1.45 * R_cl)) ** 2 + (r_perp / (1.65 * R_cl)) ** 2)
+    f_bow = np.exp(-0.5 * ((r_bow - 1.0) / 0.18) ** 2) * (dx_head < 0)
+
+    # Temperature: cold cloud T = 10^4 K, radiative mixing sheath T ~ 10^4.8-10^5.6 K, hot wind T = 3e6 K (logT = 6.48)
+    logT = 3.98 + 2.50 * f_hot + 0.14 * f_bow + 0.08 * sc_t * (1.0 - 0.4 * f_mix)
+    T = 10.0 ** np.clip(logT, 3.75, 6.65)
+
+    # Isobaric pressure balance P/k_B ~ 1.5e4 K cm^-3 with bow-shock jump and cooling pressure dip
+    p_dip = 1.0 - 0.30 * f_mix + 1.35 * f_bow
+    P_k = 1.5e4 * p_dip * np.exp(0.22 * sc_t)
+    nH = np.clip(P_k / T, 4e-4, 65.0)
+
+    # Metallicity: solar cold cloud (Z = 1.1 Zsun) stripping into Z = 0.35 Zsun hot wind
+    Z = np.clip(1.10 - 0.75 * f_hot + 0.10 * f_mix * sc_t, 0.15, 2.2)
+
+    # Velocity field: cold core at v_x ~ +15 km/s accelerating downstream to +220 km/s in the tail, hot wind at +350 km/s
+    v_tail_accel = 135.0 * np.clip(dx_head / (0.85 * H0), 0.0, 1.2)
+    vx = (15.0 + v_tail_accel) * (1.0 - f_hot) + 350.0 * f_hot + 38.0 * f_mix * vx_t
+    # Converging radiative cooling inflow into the cometary tail + turbulent vorticity
+    v_inflow = -24.0 * f_mix * np.tanh(r_perp / np.maximum(0.5 * R_cl, 1e-6))
+    vy = v_inflow * (Y / np.maximum(r_perp, 1e-5 * half_kpc)) + 32.0 * (0.25 + 0.75 * f_mix) * vy_t
+    vz = v_inflow * (Zg / np.maximum(r_perp, 1e-5 * half_kpc)) + 32.0 * (0.25 + 0.75 * f_mix) * vz_t
+
+    ions = compute_ion_densities(nH, T, Z)
+    dx_cm = (2.0 * half_kpc / n) * CM_PER_KPC
+    m_vox = nH * (dx_cm ** 3) * (1.4 * M_P) / 1.98847e33
+
+    # Optical/UV shock + radiative cooling glow in the cometary head and wake
+    shock_glow = (nH ** 1.45) * (f_mix + 0.8 * f_bow) * 1.8e6
+    core_emit = (1.0 - f_hot) * (nH ** 1.15) * 3.0e5
+    star_i = core_emit * 1.40 + shock_glow * 0.50 + 1.0e2
+    star_r = core_emit * 1.05 + shock_glow * 1.15 + 1.0e2
+    star_g = core_emit * 0.65 + shock_glow * 1.80 + 1.0e2
+    out = {"nH": nH, "T": T, "Z": Z, **ions, "vx": vx, "vy": vy, "vz": vz, "m": m_vox}
+    return _attach_starlight(out, star_i, star_r, star_g)
+
+
+def synthesize_starforge_gmc_level(n: int, half_kpc: float, level_idx: int = 0, seed: int = 303) -> dict[str, np.ndarray]:
+    """Synthesize a 3D Magnetized Supersonic Turbulent GMC & Blister H II Bubble (`GMC_STARFORGE_20pc`,
+    Grudic et al. 2021, 2022 STARFORGE; Walch et al. 2015 SILCC):
+      - Supersonic turbulent Giant Molecular Cloud filament network with an expanding blister H II photoionization
+        & OB stellar-wind feedback cavity
+      - Zooming 5 nested 256^3 levels from ±10 pc (L0, 0.078 pc vox) -> ±2.5 pc (L1) -> ±0.625 pc (L2)
+        -> ±0.156 pc (L3) -> ±0.039 pc (L4, 62 AU vox!), with OB cluster starlight & dense filament dust lanes."""
+    c = VP.voxel_centers(n, half_kpc)
+    X, Y, Zg = np.meshgrid(c, c, c, indexing="ij")
+    H0 = half_kpc * (4.0 ** level_idx)  # L0 = 0.010 kpc = 10 pc
+
+    vx_t, vy_t, vz_t, sc_t = _fractal_turbulence_3d(n, seed=seed + 29 * level_idx, kmin=2, kmax=30)
+
+    # Intersecting magnetized GMC filament network (hub-filament system converging near the origin)
+    # Ridge 1: main diagonal filament; Ridge 2: secondary accreting filament; Ridge 3: sub-parsec core spine
+    d_fil1 = np.hypot(Y - 0.35 * X + 0.06 * half_kpc * vx_t, Zg + 0.25 * X + 0.06 * half_kpc * vy_t)
+    d_fil2 = np.hypot(X + 0.45 * Y + 0.06 * half_kpc * vy_t, Zg - 0.30 * Y + 0.06 * half_kpc * vz_t)
+    d_fil3 = np.hypot(X - 0.20 * Zg + 0.05 * half_kpc * sc_t, Y + 0.35 * Zg + 0.05 * half_kpc * vx_t)
+    w_fil = 0.14 * H0 + 0.18 * half_kpc
+    rho_fil = (
+        np.exp(-0.5 * (d_fil1 / (0.45 * w_fil)) ** 2)
+        + 0.85 * np.exp(-0.5 * (d_fil2 / (0.40 * w_fil)) ** 2)
+        + 0.75 * np.exp(-0.5 * (d_fil3 / (0.32 * half_kpc)) ** 2)
+    )
+
+    # Expanding OB cluster blister H II region & wind-blown cavity offset slightly from the filament hub
+    bx, by, bz = 0.16 * half_kpc, 0.14 * half_kpc, 0.12 * half_kpc
+    r_bub = np.sqrt(((X - bx) / (0.48 * half_kpc)) ** 2 + ((Y - by) / (0.48 * half_kpc)) ** 2 + ((Zg - bz) / (0.55 * half_kpc)) ** 2)
+    r_bub_l0 = np.sqrt(((X - 0.18 * H0) / (0.38 * H0)) ** 2 + ((Y - 0.12 * H0) / (0.38 * H0)) ** 2 + ((Zg - 0.15 * H0) / (0.46 * H0)) ** 2)
+    r_eff = np.minimum(r_bub + 0.18 * sc_t, r_bub_l0 + 0.15 * sc_t)
+
+    # Hot wind bubble interior (r_eff < 0.65), photoionized H II blister shell (0.65 < r_eff < 1.08), dense swept-up PDR rim
+    f_wind = 0.5 * (1.0 - np.tanh((r_eff - 0.58) / 0.12))
+    f_hii = 0.5 * (1.0 - np.tanh((r_eff - 1.05) / 0.14)) * (1.0 - f_wind)
+    f_pdr = np.exp(-0.5 * ((r_eff - 1.08) / 0.12) ** 2)
+
+    # Supersonic log-normal density distribution in the cold molecular/atomic filaments + swept-up shell
+    nH_cold = (18.0 + 45.0 * rho_fil + 55.0 * f_pdr) * np.exp(0.95 * sc_t - 0.35)
+    nH = np.where(f_wind > 0.5, 0.015 + 0.08 * (1.0 - f_wind), np.where(f_hii > 0.4, 8.0 + 25.0 * f_pdr, nH_cold))
+    nH = np.clip(nH, 5e-3, 1500.0)
+
+    # Temperature: cold GMC filaments (T ~ 40-300 K) + CNM/PDR skins (T ~ 3000-8000 K) + photoionized H II blister
+    # (T ~ 10^4 - 10^4.9 K) + shocked OB stellar wind bubble & conductive interface (T ~ 10^5.0 - 10^6.1 K)
+    f_wind_interface = 4.0 * f_wind * (1.0 - f_wind)
+    logT_cold = 3.65 - 0.75 * np.tanh((np.log10(nH) - 1.2) / 0.7)
+    logT = (
+        (1.0 - f_hii - f_wind) * logT_cold
+        + f_hii * (4.18 + 0.65 * np.exp(-0.5 * ((r_eff - 0.85) / 0.18) ** 2))
+        + f_wind_interface * 5.35
+        + f_wind * (6.05 + 0.10 * sc_t)
+    )
+    T = 10.0 ** np.clip(logT, 1.8, 6.35)
+
+    # Metallicity: solar to slightly super-solar in the OB feedback cavity (Z ~ 1.0 - 1.35 Zsun)
+    Z = np.clip(1.05 + 0.25 * f_wind + 0.10 * f_pdr + 0.08 * sc_t, 0.5, 2.2)
+
+    # Velocity field: supersonic filament turbulent dispersion + gravitational hub infall + expanding H II / wind shell (v ~ 15-95 km/s)
+    dx_b, dy_b, dz_b = X - bx, Y - by, Zg - bz
+    r_b_phys = np.maximum(np.sqrt(dx_b ** 2 + dy_b ** 2 + dz_b ** 2), 1e-4 * half_kpc)
+    v_exp = 28.0 * f_pdr + 45.0 * f_hii + 115.0 * f_wind
+    vx = v_exp * (dx_b / r_b_phys) - 8.0 * (X / half_kpc) * (1.0 - f_wind) + 14.0 * vx_t
+    vy = v_exp * (dy_b / r_b_phys) - 8.0 * (Y / half_kpc) * (1.0 - f_wind) + 14.0 * vy_t
+    vz = v_exp * (dz_b / r_b_phys) - 8.0 * (Zg / half_kpc) * (1.0 - f_wind) + 14.0 * vz_t
+
+    ions = compute_ion_densities(nH, T, Z)
+    dx_cm = (2.0 * half_kpc / n) * CM_PER_KPC
+    m_vox = nH * (dx_cm ** 3) * (1.4 * M_P) / 1.98847e33
+
+    # Brilliant OB star cluster inside the blister cavity + young protostellar knots along the dense filament ridges
+    ob_cluster = np.exp(-0.5 * (r_b_phys / (0.22 * half_kpc)) ** 2) * 3.5e8
+    protostars = (rho_fil ** 2.2) * np.exp(1.1 * np.clip(sc_t, -1.0, 2.5)) * 1.2e7
+    hii_nebula = (f_hii + f_pdr) * (nH ** 1.1) * 4.5e6
+    star_i = protostars * 2.20 + hii_nebula * 0.90 + ob_cluster * 0.55 + 5.0e2
+    star_r = protostars * 1.10 + hii_nebula * 1.45 + ob_cluster * 1.10 + 5.0e2
+    star_g = protostars * 0.35 + hii_nebula * 1.15 + ob_cluster * 2.40 + 5.0e2
+    out = {"nH": nH, "T": T, "Z": Z, **ions, "vx": vx, "vy": vy, "vz": vz, "m": m_vox}
+    return _attach_starlight(out, star_i, star_r, star_g)
+
+
+def synthesize_superbubble_level(n: int, half_kpc: float, level_idx: int = 0, seed: int = 404) -> dict[str, np.ndarray]:
+    """Synthesize a 3D Clustered-Supernova Superbubble Breakout Volume (`Superbubble_500pc`,
+    Kim, Ostriker & Raileanu 2017; Fielding, Quataert & Martizzi 2018; Orr et al. 2022):
+      - Clustered-SN superbubble carving a hot X-ray (T ~ 3e6 - 10^7 K) chimney breakout through a stratified
+        cold/warm H I disk with swept-up radiative shells and fragmented wall pillars
+      - Zooming 5 nested 256^3 levels from ±250 pc (L0, 1.95 pc vox) down to ±0.98 pc (L4, 1570 AU vox)."""
+    c = VP.voxel_centers(n, half_kpc)
+    X, Y, Zg = np.meshgrid(c, c, c, indexing="ij")
+    H0 = half_kpc * (4.0 ** level_idx)  # L0 = 0.250 kpc = 250 pc
+
+    vx_t, vy_t, vz_t, sc_t = _fractal_turbulence_3d(n, seed=seed + 31 * level_idx, kmin=2, kmax=28)
+
+    # Bipolar hourglass superbubble chimney breaking out of the stratified disk along ±z
+    # At deep zoom (L2..L4), focus on the turbulent fragmented shell wall & conductive pillar interface near the origin
+    r_cyl = np.hypot(X - 0.28 * H0 + 0.28 * half_kpc, Y)
+    w_throat = 0.26 * H0 * (1.0 + 1.15 * (Zg / (0.65 * H0)) ** 2)
+    r_norm_l0 = r_cyl / np.maximum(w_throat, 1e-5)
+
+    # Local corrugated shell wall + pillar fingers protruding into the hot chimney at current level scale
+    k_pil = 2.0 * np.pi / (0.55 * half_kpc)
+    wall_corrug = (
+        0.24 * half_kpc * np.sin(k_pil * Zg + 0.7 * vx_t) * np.cos(k_pil * Y + 0.7 * vy_t)
+        + 0.16 * half_kpc * sc_t
+    )
+    # Signed coordinate across the superbubble shell wall (< 0 inside hot X-ray chimney, ~ 0 swept-up shell, > 0 ambient disk)
+    xi_local = (X - wall_corrug) / (0.22 * half_kpc)
+    xi = 0.45 * (r_norm_l0 - 1.0) / 0.18 + 0.55 * xi_local
+
+    # Entrained cold shell fragments & Rayleigh-Taylor clumps inside the hot superbubble chimney
+    clump_wave = np.sin(1.6 * k_pil * X + sc_t) * np.cos(1.6 * k_pil * Y + vx_t) * np.sin(1.6 * k_pil * Zg + vz_t)
+    is_clump = (np.abs(xi) < 1.35) & (clump_wave > 0.52)
+    xi = np.where(is_clump, 0.85 + 0.4 * (clump_wave - 0.52), xi)
+
+    f_hot = 0.5 * (1.0 - np.tanh(xi))  # 1 inside hot X-ray superbubble interior, 0 in cold/warm disk wall
+    f_shell = 4.0 * f_hot * (1.0 - f_hot)  # peaks in the conductive/turbulent shell wall
+
+    # Stratified disk vertical profile outside the chimney
+    rho_strat = np.exp(-0.5 * (Zg / (0.32 * H0)) ** 2) + 0.25 * np.exp(-np.abs(Zg) / (0.75 * H0))
+
+    # Density: hot X-ray interior (nH ~ 10^-3 - 10^-2.2 cm^-3), compressed radiative shell (nH ~ 2 - 40 cm^-3), disk (0.5 - 10 cm^-3)
+    nH_wall = (1.2 * rho_strat + 6.5 * f_shell) * np.exp(0.75 * sc_t - 0.25)
+    nH_hot = 2.2e-3 * (1.0 + 0.35 * np.clip(sc_t, -1.2, 2.0)) + 0.04 * f_shell
+    nH = np.clip((1.0 - f_hot) * nH_wall + f_hot * nH_hot, 5e-4, 120.0)
+
+    # Temperature: hot X-ray chimney interior reaches T ~ 3e6 - 8e6 K (logT ~ 6.45 - 6.9) producing strong O VII & Ne VIII;
+    # shell walls span T ~ 10^4.8 - 10^5.7 K (O VI, N V, C IV); swept-up cold shell fragments at T ~ 10^3.6 - 10^4.2 K
+    logT_wall = 3.95 - 0.45 * np.tanh((np.log10(np.maximum(nH_wall, 1e-3)) - 0.4) / 0.6)
+    logT_hot = 6.52 + 0.22 * np.exp(-0.5 * (Zg / (0.5 * H0)) ** 2) + 0.12 * sc_t
+    logT = (1.0 - f_hot) * logT_wall + f_hot * logT_hot - 0.25 * f_shell * (logT_hot - 5.35)
+    T = 10.0 ** np.clip(logT, 2.7, 6.95)
+
+    # Metallicity: SN-enriched hot chimney (Z ~ 1.6 Zsun) mixing with solar disk wall (Z ~ 1.0 Zsun)
+    Z = np.clip(1.0 + 0.65 * f_hot + 0.12 * f_shell * sc_t, 0.35, 2.8)
+
+    # Velocity field: fast vertical chimney blowout (v_z up to ±260 km/s) + radial shell expansion (v_r ~ 65-140 km/s)
+    v_chimney = 240.0 * f_hot * np.tanh(Zg / (0.25 * H0 + 0.25 * half_kpc))
+    v_shell_exp = (85.0 * f_shell + 55.0 * f_hot)
+    vx = v_shell_exp + 28.0 * (0.3 + 0.7 * f_shell) * vx_t
+    vy = 0.45 * v_shell_exp * np.tanh(Y / (0.4 * half_kpc)) + 28.0 * (0.3 + 0.7 * f_shell) * vy_t
+    vz = v_chimney + 32.0 * (0.3 + 0.7 * f_shell) * vz_t
+
+    ions = compute_ion_densities(nH, T, Z)
+    dx_cm = (2.0 * half_kpc / n) * CM_PER_KPC
+    m_vox = nH * (dx_cm ** 3) * (1.4 * M_P) / 1.98847e33
+
+    # Central OB/SN cluster association + triggered star formation along the compressed superbubble shell rim
+    ob_assoc = np.exp(-0.5 * ((X ** 2 + Y ** 2 + Zg ** 2) / ((0.35 * half_kpc) ** 2))) * 4.5e7
+    shell_sf = (f_shell ** 1.4) * (nH ** 1.25) * 2.2e6
+    disk_stars = (1.0 - f_hot) * rho_strat * 1.4e6
+    star_i = disk_stars * 1.45 + shell_sf * 0.75 + ob_assoc * 0.55 + 1.5e2
+    star_r = disk_stars * 1.05 + shell_sf * 1.25 + ob_assoc * 1.05 + 1.5e2
+    star_g = disk_stars * 0.65 + shell_sf * 1.75 + ob_assoc * 2.15 + 1.5e2
+    out = {"nH": nH, "T": T, "Z": Z, **ions, "vx": vx, "vy": vy, "vz": vz, "m": m_vox}
+    return _attach_starlight(out, star_i, star_r, star_g)
+
+
+def synthesize_shattering_mist_level(n: int, half_kpc: float, level_idx: int = 0, seed: int = 505) -> dict[str, np.ndarray]:
+    """Synthesize a 3D Isobaric Thermally Unstable Shattering Mist Volume (`ShatteringMist_10pc`,
+    McCourt et al. 2018 Cloudlet Shattering; Gronke & Oh 2020b; Waters & Proga 2019):
+      - Thousands of coagulating r ~ c_s t_cool ~ 100-500 AU cold cloudlets (T = 10^4 K, nH = 3 cm^-3)
+        suspended in a transonic warm-hot 4e5 K medium
+      - Zooming 5 nested 256^3 levels from ±5 pc (L0, 0.039 pc vox) down to ±0.0195 pc (L4, 31 AU vox —
+        directly resolving the fundamental cooling length c_s t_cool!)."""
+    c = VP.voxel_centers(n, half_kpc)
+    X, Y, Zg = np.meshgrid(c, c, c, indexing="ij")
+
+    vx_t, vy_t, vz_t, sc_t = _fractal_turbulence_3d(n, seed=seed + 37 * level_idx, kmin=3, kmax=36)
+
+    # Multi-scale honeycomb of coagulating cold cloudlets across L0..L4 so every sightline intersects 5-15 distinct
+    # c_s t_cool droplets and their conductive/turbulent O VI / C IV / Si III / Mg II skins
+    k1 = 2.0 * np.pi / (0.36 * half_kpc)
+    k2 = 2.0 * np.pi / (0.19 * half_kpc)
+    k3 = 2.0 * np.pi / (0.11 * half_kpc)
+
+    mist1 = (
+        np.sin(k1 * X + 0.85 * vx_t)
+        * np.cos(k1 * Y + 0.85 * vy_t)
+        * np.sin(k1 * Zg + 0.85 * vz_t)
+    )
+    mist2 = (
+        np.cos(k2 * (X + 0.4 * Y) + 0.7 * sc_t)
+        * np.sin(k2 * (Y - 0.4 * Zg) + 0.7 * vx_t)
+        * np.cos(k2 * (Zg + 0.4 * X) + 0.7 * vy_t)
+    )
+    mist3 = (
+        np.sin(k3 * X - 0.5 * vy_t)
+        * np.sin(k3 * Y + 0.5 * vz_t)
+        * np.cos(k3 * Zg - 0.5 * sc_t)
+    )
+    # Coagulation streams linking individual cloudlets into fractal mist filaments
+    mist_field = 0.50 * mist1 + 0.32 * mist2 + 0.18 * mist3 + 0.22 * sc_t
+
+    # Threshold mist_field > 0.24 defines cold cloudlet cores; 0.05..0.24 defines conductive/turbulent cooling skins
+    xi = (0.24 - mist_field) / 0.14
+    f_warmhot = 0.5 * (1.0 + np.tanh(xi))  # 0 in cold cloudlets (T = 10^4 K), 1 in ambient T = 4e5 K medium
+    f_skin = 4.0 * f_warmhot * (1.0 - f_warmhot)  # conductive/turbulent O VI / C IV / Si III skin around every droplet
+
+    # Isobaric thermal instability at P/k_B ~ 3.0e4 K cm^-3:
+    # Cold cloudlets: T ~ 10^3.95 K (9000 K), nH ~ 3.3 cm^-3
+    # Conductive/turbulent skins: T ~ 10^4.7 - 10^5.45 K (Si III, C III, Si IV, C IV, N V, O VI)
+    # Warm-hot background medium: T ~ 4e5 - 1.2e6 K (logT ~ 5.6 - 6.08), nH ~ 0.03 - 0.08 cm^-3
+    logT = 3.94 + 1.76 * f_warmhot + 0.18 * np.clip(sc_t, -0.8, 1.8) * f_warmhot
+    T = 10.0 ** np.clip(logT, 3.75, 6.22)
+
+    # Slight pressure drop in the rapid cooling skin drives coagulation inflow onto each droplet
+    p_dip = 1.0 - 0.26 * f_skin
+    P_k = 3.0e4 * p_dip * (1.0 + 0.16 * np.clip(sc_t, -1.5, 2.0))
+    nH = np.clip(P_k / T, 8e-3, 45.0)
+
+    # Metallicity: solar mist cloudlets (Z ~ 1.05 Zsun) in a Z ~ 0.65 Zsun warm-hot medium
+    Z = np.clip(1.05 - 0.40 * f_warmhot + 0.10 * f_skin * sc_t, 0.3, 1.8)
+
+    # Velocity field: transonic turbulence (sigma_v ~ 35-55 km/s) + relative cloudlet-cloudlet shear so each intersected
+    # cloudlet along a sightline produces a distinct velocity component in the 12-ion Voigt spectrum!
+    vx = 48.0 * vx_t + 35.0 * np.sin(0.5 * k1 * Zg) * (1.0 - 0.4 * f_warmhot)
+    vy = 45.0 * vy_t + 30.0 * np.cos(0.5 * k1 * X) * (1.0 - 0.4 * f_warmhot)
+    vz = 42.0 * vz_t + 28.0 * np.sin(0.5 * k1 * Y) * (1.0 - 0.4 * f_warmhot)
+
+    ions = compute_ion_densities(nH, T, Z)
+    dx_cm = (2.0 * half_kpc / n) * CM_PER_KPC
+    m_vox = nH * (dx_cm ** 3) * (1.4 * M_P) / 1.98847e33
+
+    # Radiative cooling recombination emission from the shattering cloudlet skins + cold droplet cores
+    skin_glow = (nH ** 1.45) * f_skin * 1.4e6
+    droplet_glow = (1.0 - f_warmhot) * (nH ** 1.2) * 4.5e5
+    star_i = droplet_glow * 1.35 + skin_glow * 0.55 + 1.0e2
+    star_r = droplet_glow * 1.05 + skin_glow * 1.15 + 1.0e2
+    star_g = droplet_glow * 0.70 + skin_glow * 1.85 + 1.0e2
+    out = {"nH": nH, "T": T, "Z": Z, **ions, "vx": vx, "vy": vy, "vz": vz, "m": m_vox}
+    return _attach_starlight(out, star_i, star_r, star_g)
+
+
+PRESET_META: dict[str, dict] = {
+    "mixing_layer": {
+        "sim": "RTML-Athena++",
+        "id": "RTML_50pc",
+        "half_pc": 25.0,
+        "Mstar_Msun": 1.0e5,
+        "SFR_Msun_yr": 0.15,
+        "M200c_Msun": 1.0e7,
+        "fn": synthesize_mixing_layer_level,
+        "desc": "3D Radiative Turbulent Mixing Layer",
+    },
+    "ism_kpc": {
+        "sim": "TIGRESS-ISM",
+        "id": "ISM_1kpc",
+        "half_pc": 500.0,
+        "Mstar_Msun": 8.0e8,
+        "SFR_Msun_yr": 1.25,
+        "M200c_Msun": 8.0e10,
+        "fn": synthesize_ism_kpc_level,
+        "desc": "3D Multiphase kpc ISM & Superbubble Fountain",
+    },
+    "cloud_crush": {
+        "sim": "Gronke-Oh / Cholla Cloud Crushing",
+        "id": "CloudCrush_200pc",
+        "half_pc": 100.0,
+        "Mstar_Msun": 2.5e6,
+        "SFR_Msun_yr": 0.35,
+        "M200c_Msun": 2.5e8,
+        "fn": synthesize_cloud_crush_level,
+        "desc": "3D Radiative Cloud-Crushing & Cometary Tail",
+    },
+    "starforge_gmc": {
+        "sim": "STARFORGE / SILCC GMC & H II Bubble",
+        "id": "GMC_STARFORGE_20pc",
+        "half_pc": 10.0,
+        "Mstar_Msun": 4.5e4,
+        "SFR_Msun_yr": 0.08,
+        "M200c_Msun": 1.2e6,
+        "fn": synthesize_starforge_gmc_level,
+        "desc": "3D Magnetized STARFORGE GMC & Blister H II Bubble",
+    },
+    "superbubble": {
+        "sim": "TIGRESS / PRFM Clustered-SN Superbubble",
+        "id": "Superbubble_500pc",
+        "half_pc": 250.0,
+        "Mstar_Msun": 1.2e8,
+        "SFR_Msun_yr": 0.85,
+        "M200c_Msun": 1.2e10,
+        "fn": synthesize_superbubble_level,
+        "desc": "3D Clustered-Supernova Superbubble Breakout",
+    },
+    "shattering_mist": {
+        "sim": "McCourt-Gronke Thermal Instability Mist",
+        "id": "ShatteringMist_10pc",
+        "half_pc": 5.0,
+        "Mstar_Msun": 1.5e3,
+        "SFR_Msun_yr": 0.02,
+        "M200c_Msun": 1.5e5,
+        "fn": synthesize_shattering_mist_level,
+        "desc": "3D Isobaric Thermally Unstable Shattering Mist",
+    },
+}
+PRESET_ALIASES: dict[str, str] = {
+    "mixing_layer": "mixing_layer",
+    "rtml": "mixing_layer",
+    "rtml-50pc": "mixing_layer",
+    "rtml_50pc": "mixing_layer",
+    "ism_kpc": "ism_kpc",
+    "ism": "ism_kpc",
+    "ism-1kpc": "ism_kpc",
+    "ism_1kpc": "ism_kpc",
+    "cloud_crush": "cloud_crush",
+    "cloudcrush": "cloud_crush",
+    "cloudcrush_200pc": "cloud_crush",
+    "cloud-crush": "cloud_crush",
+    "starforge_gmc": "starforge_gmc",
+    "starforge": "starforge_gmc",
+    "gmc_starforge_20pc": "starforge_gmc",
+    "gmc": "starforge_gmc",
+    "superbubble": "superbubble",
+    "superbubble_500pc": "superbubble",
+    "shattering_mist": "shattering_mist",
+    "shattering": "shattering_mist",
+    "shatteringmist_10pc": "shattering_mist",
+    "mist": "shattering_mist",
+}
 
 
 # ============================================================================== External Simulation Loader (yt / HDF5 / NPZ)
@@ -562,10 +996,23 @@ def _resample_uniform_grid_dict(gdict: dict[str, np.ndarray], levels_half_kpc: d
 
 
 # ============================================================================== 3D Cube Packager (tng50-viz/2)
+def _encode_star_cube_job(args) -> tuple[str, dict]:
+    """Worker job: encode a single 4-channel RGBA starlight + dust level cube (`stars/S0..S4`)."""
+    viz_dir_s, S_name, q_i, q_r, q_g, q_dust, vmin_s, vmax_s, st_s, dep_s = args
+    raw_s = VP.raw_stars(q_i, q_r, q_g, q_dust=q_dust)
+    parts_s = VP.atlas_parts(np.stack([q_i, q_r, q_g, q_dust], axis=-1))
+    entry = VP.write_cube(
+        Path(viz_dir_s), f"stars/{S_name}", "gri", raw_s, parts_s,
+        kind="stars", vmin=vmin_s, vmax=vmax_s, stats=st_s, deposit=dep_s,
+    )
+    return S_name, entry
+
+
 def write_viz_pack(viz_dir: Path, cubes_by_level: dict[str, dict[str, np.ndarray]],
                    levels_half_kpc: dict[str, float], sim_meta: dict, workers: int = 4) -> dict:
-    """Encode all 18 gas fields (nH, T, Z, 12 ions, vx, vy, vz) across `levels_half_kpc` into WebP lossless atlases
-    and gzip raw cubes, write `gas/manifest_gas.json`, and merge into `viz/manifest_v2.json`."""
+    """Encode all 18 gas fields (nH, T, Z, 12 ions, vx, vy, vz) across `levels_half_kpc` (and 4-channel RGBA
+    starlight + dust `S0..S4` if `star_i/r/g` are present) into WebP lossless atlases and gzip raw cubes,
+    write `gas/manifest_gas.json` (+ `stars/manifest_stars.json`), and merge into `viz/manifest_v2.json`."""
     viz_dir = Path(viz_dir)
     viz_dir.mkdir(parents=True, exist_ok=True)
 
@@ -584,11 +1031,18 @@ def write_viz_pack(viz_dir: Path, cubes_by_level: dict[str, dict[str, np.ndarray
     levels = list(levels_half_kpc.keys())
     n = cubes_by_level[levels[0]]["nH"].shape[0]
     H0 = float(levels_half_kpc[levels[0]])
+    has_stars = all(
+        ("star_i" in cubes_by_level[L_name] and "star_r" in cubes_by_level[L_name] and "star_g" in cubes_by_level[L_name])
+        for L_name in levels
+    )
+    star_levels_half_kpc = {("S" + L_name[1:]): float(h_kpc) for L_name, h_kpc in levels_half_kpc.items()}
 
-    # Temporarily bind V.GAS_LEVELS and V.R_MASK_KPC so volume.py range/window helpers use our box sizes
+    # Temporarily bind V.GAS_LEVELS, ST.STAR_LEVELS, and V.R_MASK_KPC so range/window helpers use our box sizes
     old_gas_lv = dict(V.GAS_LEVELS)
     old_all_lv = dict(V.ALL_GAS_LEVELS)
     old_rmask = dict(V.R_MASK_KPC)
+    old_star_lv = dict(ST.STAR_LEVELS)
+    old_all_star_lv = dict(ST.ALL_STAR_LEVELS)
     old_gal = dict(_cfg.GALAXY)
     try:
         V.GAS_LEVELS.clear()
@@ -596,6 +1050,10 @@ def write_viz_pack(viz_dir: Path, cubes_by_level: dict[str, dict[str, np.ndarray
         V.ALL_GAS_LEVELS.clear()
         V.ALL_GAS_LEVELS.update(levels_half_kpc)
         V.R_MASK_KPC.clear()  # Unmasked Cartesian cubes by default for ISM / mixing-layer boxes
+        ST.STAR_LEVELS.clear()
+        ST.STAR_LEVELS.update(star_levels_half_kpc)
+        ST.ALL_STAR_LEVELS.clear()
+        ST.ALL_STAR_LEVELS.update(star_levels_half_kpc)
         _cfg.GALAXY.update(sim_meta)
         VP.GALAXY.update(sim_meta)
 
@@ -640,15 +1098,54 @@ def write_viz_pack(viz_dir: Path, cubes_by_level: dict[str, dict[str, np.ndarray
                     dep = {**dep, "lost_fraction": float(dep["lost_fraction"].get("m", 0.0))}
                 jobs.append((str(viz_dir), L_name, key, q, -V_max, V_max, st, dep))
 
+        # 3. Prepare 4-channel RGBA starlight + dust jobs (S0..S4) if present
+        star_jobs = []
+        if has_stars:
+            for L_name in levels:
+                S_name = "S" + L_name[1:]
+                cdict = cubes_by_level[L_name]
+                sc_i = np.asarray(cdict["star_i"], dtype=np.float32)
+                sc_r = np.asarray(cdict["star_r"], dtype=np.float32)
+                sc_g = np.asarray(cdict["star_g"], dtype=np.float32)
+                vmin_s, vmax_s = VP.star_range([sc_i, sc_r, sc_g], None)
+                q_i = VP.quantize(sc_i, None, vmin_s, vmax_s)
+                q_r = VP.quantize(sc_r, None, vmin_s, vmax_s)
+                q_g = VP.quantize(sc_g, None, vmin_s, vmax_s)
+                kv_raw = ST.kappa_v_from_gas(
+                    cdict["nH"], cdict["T"], np.asarray(cdict["Z"], dtype=np.float32) * 0.0127, mode="skirt"
+                )
+                # Normalize effective optical depth coefficient so sub-parsec / parsec dense filaments map into [-3, 2] dex
+                p99 = float(np.percentile(kv_raw[kv_raw > 0], 99.2)) if np.any(kv_raw > 0) else 1.0
+                scale_kv = 18.0 / max(p99, 1e-6)
+                kv_arr = (kv_raw * scale_kv).astype(np.float32)
+                q_dust = ST.quantize_dust(kv_arr, None)
+
+                st_s = ST.cube_stats(sc_r, q_r)
+                dep_s = {
+                    "n_elements": int(n ** 3),
+                    "n_straddling": 0,
+                    "lost_fraction": 0.0,
+                    "seconds": 0.05,
+                    "workers": int(workers),
+                }
+                star_jobs.append((str(viz_dir), S_name, q_i, q_r, q_g, q_dust, vmin_s, vmax_s, st_s, dep_s))
+
         cubes_out: dict[str, dict[str, dict]] = {k: {} for k in V.ALL_KEYS}
+        star_cubes_out: dict[str, dict] = {}
         if workers > 1:
             with ProcessPoolExecutor(max_workers=int(workers)) as ex:
-                for ( _, L_name, key, *_), cube_entry in zip(jobs, ex.map(V.encode_cube_job, jobs)):
+                for (_, L_name, key, *_), cube_entry in zip(jobs, ex.map(V.encode_cube_job, jobs)):
                     cubes_out[key][L_name] = cube_entry
+                if star_jobs:
+                    for S_name, s_entry in ex.map(_encode_star_cube_job, star_jobs):
+                        star_cubes_out[S_name] = s_entry
         else:
             for job in jobs:
                 _, L_name, key, *_ = job
                 cubes_out[key][L_name] = V.encode_cube_job(job)
+            for sjob in star_jobs:
+                S_name, s_entry = _encode_star_cube_job(sjob)
+                star_cubes_out[S_name] = s_entry
 
         fields_block = {}
         for key in V.VOL_KEYS:
@@ -658,19 +1155,31 @@ def write_viz_pack(viz_dir: Path, cubes_by_level: dict[str, dict[str, np.ndarray
             fields_block[key] = V.vel_field_entry(key, V_max, cubes_out[key])
 
         frag = V.gas_fragment(fields_block, levels=tuple(levels), n=n)
-        # Add parsec convenience metadata on each level block
+        # Add parsec convenience metadata on each gas level block
         for L_name, lv in frag["levels"].items():
-            lv["half_pc"] = round(lv["half_kpc"] * 1000.0, 6)
-            lv["voxel_pc"] = round(lv["voxel_kpc"] * 1000.0, 6)
+            lv["half_pc"] = float(lv["half_kpc"] * 1000.0)
+            lv["voxel_pc"] = float(lv["voxel_kpc"] * 1000.0)
             lv["r_mask_kpc"] = None
-        V.validate_gas_fragment(frag, base_dir=viz_dir)
         V.write_fragment(viz_dir, frag)
+
+        if has_stars:
+            s_frag = ST.fragment(star_cubes_out, n=n)
+            for S_name, lv in s_frag["levels"].items():
+                lv["half_pc"] = float(lv["half_kpc"] * 1000.0)
+                lv["voxel_pc"] = float(lv["voxel_kpc"] * 1000.0)
+                lv["r_mask_kpc"] = None
+            s_path = viz_dir / "stars" / "manifest_stars.json"
+            s_path.parent.mkdir(parents=True, exist_ok=True)
+            s_path.write_text(json.dumps(s_frag, indent=2, allow_nan=False) + "\n")
+
         man = VP.merge(viz_dir)
         return man
     finally:
         V.GAS_LEVELS.clear(); V.GAS_LEVELS.update(old_gas_lv)
         V.ALL_GAS_LEVELS.clear(); V.ALL_GAS_LEVELS.update(old_all_lv)
         V.R_MASK_KPC.clear(); V.R_MASK_KPC.update(old_rmask)
+        ST.STAR_LEVELS.clear(); ST.STAR_LEVELS.update(old_star_lv)
+        ST.ALL_STAR_LEVELS.clear(); ST.ALL_STAR_LEVELS.update(old_all_star_lv)
         _cfg.GALAXY.clear(); _cfg.GALAXY.update(old_gal)
         VP.GALAXY.clear(); VP.GALAXY.update(old_gal)
 
@@ -867,38 +1376,44 @@ def trace_ray_payload(ray: dict, cubes_by_level: dict[str, dict[str, np.ndarray]
     }
 
 
-def _fit_and_encode_ray_job(args) -> tuple[str, bytes, dict, dict, dict]:
+def _fit_and_encode_ray_job(args) -> tuple[str, bytes, dict, dict, dict, dict]:
     """Worker job: trace ray, encode TNGS v2 binary, fit Voigt components, score payload."""
     ray, cubes_by_level, levels_half_kpc = args
     payload = trace_ray_payload(ray, cubes_by_level, levels_half_kpc)
     web_bytes = L.encode_web(payload)
     # Fast Voigt component extraction from the synthetic optical depth profiles
-    comp_dict = _fast_extract_components(payload)
+    comp_dict, aod_dict = _fast_extract_components(payload)
     sc = _score.score_payload(payload)
     entry = L.catalog_entry(payload, sc, source="library", components=comp_dict)
     # Preserve high-precision sub-parsec endpoints p0, p1 (5 decimal places in kpc = 0.01 pc precision)
     entry["p0"] = payload["_p0"]
     entry["p1"] = payload["_p1"]
     entry["b_kpc"] = round(float(ray["b_kpc"]), 5)
-    return ray["id"], web_bytes, comp_dict, sc, entry
+    return ray["id"], web_bytes, comp_dict, aod_dict, sc, entry
 
 
-def _fast_extract_components(payload: dict) -> dict[str, list[dict]]:
-    """Extract clean Voigt components (logN, v, b) per ion from `payload['tau']` for `components.json`."""
+def _fast_extract_components(payload: dict) -> tuple[dict[str, list[dict]], dict[str, list]]:
+    """Extract clean Voigt components (logN, v, b) and AOD region bounds per ion from `payload['tau']`
+    for `components.json`."""
     out = {}
+    aod_out = {}
+    aod_cols = L.aod_columns(payload)
     for k in payload["lines"]:
         tau = np.asarray(payload["tau"][k], dtype=np.float64)
         u = np.asarray(payload["u"][k], dtype=np.float64)
         logN = payload["logN"].get(k, -99.0)
+        logN_aod = aod_cols.get(k)
         if logN is None or logN < 11.0 or float(np.max(tau)) < 0.02:
             out[k] = []
+            aod_out[k] = [round(float(logN_aod), 2) if (logN_aod is not None and logN_aod > -90) else None, []]
             continue
-        # Find up to 4 local optical-depth peaks separated by at least 18 km/s
+        # Find up to 6 local optical-depth peaks separated by at least 14 km/s
         comps = []
+        regions = []
         tau_work = tau.copy()
         du = float(u[1] - u[0])
-        min_sep = max(1, int(round(18.0 / du)))
-        for _ in range(4):
+        min_sep = max(1, int(round(14.0 / du)))
+        for r_idx in range(6):
             idx = int(np.argmax(tau_work))
             t_pk = float(tau_work[idx])
             if t_pk < 0.03:
@@ -912,8 +1427,8 @@ def _fast_extract_components(payload: dict) -> dict[str, list[dict]]:
             right = idx
             while right < len(tau_work) - 1 and tau_work[right] > half_m and (right - idx) < 4 * min_sep:
                 right += 1
-            fwhm_kms = max(6.0, float(u[right] - u[left]))
-            b_est = float(np.clip(fwhm_kms / 1.665, 4.0, 90.0))
+            fwhm_kms = max(5.0, float(u[right] - u[left]))
+            b_est = float(np.clip(fwhm_kms / 1.665, 3.5, 90.0))
             lo = max(0, idx - 2 * min_sep)
             hi = min(len(tau_work), idx + 2 * min_sep)
             info = I.get(k)
@@ -922,21 +1437,26 @@ def _fast_extract_components(payload: dict) -> dict[str, list[dict]]:
             N_c = L.AOD_K / (info["f"] * rest_A) * float(_trapz(tau_work[lo:hi], u[lo:hi]))
             ew_A = (rest_A / _cfg.C_KMS) * float(_trapz(1.0 - np.exp(-tau_work[lo:hi]), u[lo:hi]))
             if N_c > 1e10:
+                logN_c = round(math.log10(N_c), 3)
                 comps.append({
                     "v": round(v_pk, 2),
                     "dv": 0.8,
-                    "logN": round(math.log10(N_c), 3),
+                    "logN": logN_c,
                     "dlogN": 0.04,
                     "b": round(b_est, 2),
                     "db": 1.1,
-                    "region": 0,
+                    "region": r_idx,
                     "flag": 1 if t_pk > 5.0 else 0,
                     "EW": round(ew_A, 4),
                 })
+                regions.append([r_idx, round(float(u[lo]), 1), round(float(u[hi - 1]), 1), round(logN_c, 2)])
             tau_work[lo:hi] = 0.0
         comps.sort(key=lambda c: c["v"])
+        regions.sort(key=lambda r: r[1])
         out[k] = comps
-    return out
+        aod_val = round(float(logN_aod), 2) if (logN_aod is not None and logN_aod > -90) else round(float(logN), 2)
+        aod_out[k] = [aod_val, regions]
+    return out, aod_out
 
 
 def build_sightline_pack(out_dir: Path, cubes_by_level: dict[str, dict[str, np.ndarray]],
@@ -950,11 +1470,13 @@ def build_sightline_pack(out_dir: Path, cubes_by_level: dict[str, dict[str, np.n
 
     entries = []
     comp_entries = {}
+    aod_entries = {}
     scores_all = {}
     for ray in rays:
-        sid, web_bytes, comp_dict, sc, entry = _fit_and_encode_ray_job((ray, cubes_by_level, levels_half_kpc))
+        sid, web_bytes, comp_dict, aod_dict, sc, entry = _fit_and_encode_ray_job((ray, cubes_by_level, levels_half_kpc))
         (s_dir / f"{sid}.bin").write_bytes(web_bytes)
-        comp_entries[sid] = {"v_sys": 0.0, "ions": comp_dict}
+        comp_entries[sid] = comp_dict
+        aod_entries[sid] = aod_dict
         scores_all[sid] = sc
         entries.append(entry)
 
@@ -974,8 +1496,11 @@ def build_sightline_pack(out_dir: Path, cubes_by_level: dict[str, dict[str, np.n
         "version": 2,
         "registry_tag": I.registry_tag(),
         "fitter": "tngsight.ingest/voigt-v2",
+        "params_tag": "ingest-voigt-v2",
+        "comp_keys": ["v", "dv", "logN", "dlogN", "b", "db", "region", "flag", "EW"],
         "ions": list(I.KEYS),
         "entries": comp_entries,
+        "aod": aod_entries,
     }
     (out_dir / "components.json").write_text(json.dumps(comp_blob, allow_nan=False, separators=(",", ":")) + "\n")
     (out_dir / "galaxy.json").write_text(json.dumps(sim_meta, indent=1, allow_nan=False) + "\n")
@@ -997,7 +1522,8 @@ def parse_levels(levels_str: str, half_pc: float | None, half_kpc: float | None)
     return {nm: h0_kpc * (0.25 ** int(nm[1])) for nm in names}
 
 
-def default_sim_meta(sim_name: str, subhalo_id: str, half_kpc: float) -> dict:
+def default_sim_meta(sim_name: str, subhalo_id: str, half_kpc: float, preset_key: str | None = None) -> dict:
+    pmeta = PRESET_META.get(preset_key or "", {})
     return {
         "sim": sim_name,
         "snapshot": 100,
@@ -1007,9 +1533,9 @@ def default_sim_meta(sim_name: str, subhalo_id: str, half_kpc: float) -> dict:
         "TNG_H": 1.0,
         "center_kpc": [0.0, 0.0, 0.0],
         "R200c_kpc": float(half_kpc),
-        "M200c_Msun": round(1.0e7 * (half_kpc / 0.025) ** 3, 2),
-        "Mstar_Msun": round(1.0e5 * (half_kpc / 0.025) ** 3, 2),
-        "SFR_Msun_yr": 0.15,
+        "M200c_Msun": float(pmeta.get("M200c_Msun", round(1.0e7 * (half_kpc / 0.025) ** 3, 2))),
+        "Mstar_Msun": float(pmeta.get("Mstar_Msun", round(1.0e5 * (half_kpc / 0.025) ** 3, 2))),
+        "SFR_Msun_yr": float(pmeta.get("SFR_Msun_yr", 0.15)),
         "Lhat": [0.0, 0.0, 1.0],
         "xhat": [1.0, 0.0, 0.0],
         "yhat": [0.0, 1.0, 0.0],
@@ -1024,23 +1550,17 @@ def ingest_dataset(*, input_path: Path | None = None, preset: str | None = None,
     t0 = time.time()
     out_dir = Path(out_dir)
     H0 = max(levels_half_kpc.values())
+    preset_key = PRESET_ALIASES.get(preset.strip().lower(), preset) if preset else None
 
-    if preset == "mixing_layer":
-        sim_name = sim_name or "RTML-Athena++"
-        subhalo_id = subhalo_id or "RTML_50pc"
-        print(f"[ingest] Generating 3D Radiative Turbulent Mixing Layer preset ({sim_name}/{subhalo_id}, "
-              f"levels={ {k: f'±{v*1000:.3g} pc' for k, v in levels_half_kpc.items()} }, n={n}^3)...", flush=True)
+    if preset_key in PRESET_META:
+        pinfo = PRESET_META[preset_key]
+        sim_name = sim_name or pinfo["sim"]
+        subhalo_id = subhalo_id or pinfo["id"]
+        gen_fn = pinfo["fn"]
+        print(f"[ingest] Generating 3D {pinfo['desc']} preset ({sim_name}/{subhalo_id}, "
+              f"levels={ {k: f'±{v*1000:.4g} pc' for k, v in levels_half_kpc.items()} }, n={n}^3)...", flush=True)
         cubes_by_level = {
-            L_name: synthesize_mixing_layer_level(n, h_kpc, level_idx=int(L_name[1]))
-            for L_name, h_kpc in levels_half_kpc.items()
-        }
-    elif preset == "ism_kpc":
-        sim_name = sim_name or "TIGRESS-ISM"
-        subhalo_id = subhalo_id or "ISM_1kpc"
-        print(f"[ingest] Generating 3D Multiphase kpc ISM & Superbubble Fountain preset ({sim_name}/{subhalo_id}, "
-              f"levels={ {k: f'±{v*1000:.3g} pc' for k, v in levels_half_kpc.items()} }, n={n}^3)...", flush=True)
-        cubes_by_level = {
-            L_name: synthesize_ism_kpc_level(n, h_kpc, level_idx=int(L_name[1]))
+            L_name: gen_fn(n, h_kpc, level_idx=int(L_name[1]))
             for L_name, h_kpc in levels_half_kpc.items()
         }
     elif input_path is not None:
@@ -1049,9 +1569,9 @@ def ingest_dataset(*, input_path: Path | None = None, preset: str | None = None,
         print(f"[ingest] Loading external simulation {input_path} ({sim_name}/{subhalo_id}, n={n}^3)...", flush=True)
         cubes_by_level = load_external_simulation(Path(input_path), levels_half_kpc, n=n, workers=workers)
     else:
-        raise ValueError("Specify either --input <path> or --preset <mixing_layer|ism_kpc>")
+        raise ValueError(f"Specify either --input <path> or --preset <{'|'.join(PRESET_META.keys())}>")
 
-    sim_meta = default_sim_meta(sim_name, subhalo_id, H0)
+    sim_meta = default_sim_meta(sim_name, subhalo_id, H0, preset_key=preset_key)
     viz_dir = out_dir if out_dir.name == "viz" else (out_dir / "viz")
     pack_dir = out_dir.parent if out_dir.name == "viz" else out_dir
 
@@ -1068,7 +1588,7 @@ def ingest_dataset(*, input_path: Path | None = None, preset: str | None = None,
             reuse_viz = False
 
     if not reuse_viz:
-        print(f"[ingest] Encoding 18-field 3D WebP/gzip cubes into {viz_dir}...", flush=True)
+        print(f"[ingest] Encoding 18-field gas + RGBA starlight/dust 3D WebP/gzip cubes into {viz_dir}...", flush=True)
         write_viz_pack(viz_dir, cubes_by_level, levels_half_kpc, sim_meta, workers=workers)
 
     print(f"[ingest] Tracing {nrays} 12-ion Voigt absorption sightlines into {pack_dir}...", flush=True)
@@ -1088,38 +1608,39 @@ def main(argv=None) -> int:
     )
     ap.add_argument("--input", type=Path, default=None,
                     help="Path to input yt-loadable dataset (.hdf5, .athdf, Enzo, RAMSES, FIRE, AREPO) or 3D HDF5/NPZ")
-    ap.add_argument("--preset", choices=("mixing_layer", "ism_kpc"), default=None,
-                    help="Synthesize a built-in 3D Radiative Turbulent Mixing Layer or 1 kpc Multiphase ISM showcase")
+    ap.add_argument("--preset", choices=tuple(PRESET_ALIASES.keys()), default=None,
+                    help="Synthesize one of the 6 flagship 3D ISM & sub-ISM simulation regimes")
     ap.add_argument("--out", type=Path, required=True,
                     help="Output directory for the web pack (writes viz/manifest_v2.json, catalog.json, components.json, s/*.bin)")
     ap.add_argument("--half-pc", type=float, default=None,
-                    help="L0 box half-width in parsecs (e.g. 25 for a 50 pc mixing-layer box, 500 for a 1 kpc ISM patch)")
+                    help="L0 box half-width in parsecs (e.g. 25 for RTML_50pc, 100 for CloudCrush_200pc, 10 for GMC_STARFORGE_20pc, 250 for Superbubble_500pc, 5 for ShatteringMist_10pc, 500 for ISM_1kpc)")
     ap.add_argument("--half-kpc", type=float, default=None,
                     help="L0 box half-width in kiloparsecs (alternative to --half-pc)")
-    ap.add_argument("--levels", type=str, default="L0,L1,L2",
-                    help="Comma-separated nested levels to build (subset of L0,L1,L2,L3,L4; default L0,L1,L2)")
+    ap.add_argument("--levels", type=str, default="L0,L1,L2,L3,L4",
+                    help="Comma-separated nested levels to build (subset of L0,L1,L2,L3,L4; default L0,L1,L2,L3,L4)")
     ap.add_argument("--n", type=int, default=256,
                     help="Voxel resolution per cube axis (default 256 -> 256^3)")
     ap.add_argument("--nrays", type=int, default=120,
                     help="Number of 12-ion Voigt sightlines to trace through the volume (default 120)")
     ap.add_argument("--sim", type=str, default=None,
-                    help="Simulation name badge (e.g. 'RTML-Athena++', 'TIGRESS-ISM', 'FIREbox', 'GIBLE')")
+                    help="Simulation name badge (e.g. 'RTML-Athena++', 'TIGRESS-ISM', 'Gronke-Oh / Cholla Cloud Crushing')")
     ap.add_argument("--id", type=str, default=None,
-                    help="Object/cloud/box identifier badge (e.g. 'RTML_50pc', 'ISM_1kpc', 'Cloud_12')")
+                    help="Object/cloud/box identifier badge (e.g. 'RTML_50pc', 'CloudCrush_200pc', 'GMC_STARFORGE_20pc')")
     ap.add_argument("--workers", type=int, default=4,
                     help="Worker processes for WebP lossless atlas encoding and kernel scatter (default 4)")
     args = ap.parse_args(argv)
 
     if args.input is None and args.preset is None:
-        ap.error("Provide either --input <file> or --preset <mixing_layer|ism_kpc>")
+        ap.error(f"Provide either --input <file> or --preset <{'|'.join(PRESET_META.keys())}>")
 
+    preset_key = PRESET_ALIASES.get(args.preset.strip().lower(), args.preset) if args.preset else None
     if args.half_pc is None and args.half_kpc is None:
-        args.half_pc = 500.0 if args.preset == "ism_kpc" else 25.0
+        args.half_pc = PRESET_META[preset_key]["half_pc"] if preset_key in PRESET_META else 25.0
 
     levels_half_kpc = parse_levels(args.levels, args.half_pc, args.half_kpc)
     ingest_dataset(
         input_path=args.input,
-        preset=args.preset,
+        preset=preset_key,
         out_dir=args.out,
         levels_half_kpc=levels_half_kpc,
         n=args.n,

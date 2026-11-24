@@ -1,11 +1,11 @@
-// 3D re-centring ("pivot", docs/tng50/js/viewer3d.js, spec ux4 §A): the pure helpers, no browser.
+// 3D re-centring ("pivot", docs/ism/js/viewer3d.js, spec ux4 §A): the pure helpers, no browser.
 // parsePivot / formatPivot (the ?pv=x,y,z URL value: 0.1 kpc, clamped to ±400 kpc, empty at the centre), offCentre,
 // rayPivot (a sightline's closest approach to the galaxy, clamped to the segment), planePoint (the empty-ray fallback of
 // a double-click) and pickAlongRay (the densest sample of nested byte cubes along the clicked ray, nearest first on ties,
 // finest cube where they overlap). The viewer's own checks (chip, animation, URL, double-click) are in viewer_browser.mjs.
 // Usage: node tests/js/pivot_unit.mjs
-import {PIVOT, parsePivot, formatPivot, parseCam, formatCam, offCentre, rayPivot, planePoint, pickAlongRay, MOVING_LADDER, pickMovingRung, createMovingGovernor} from "../../docs/tng50/js/viewer3d.js";
-import * as E3D from "../../docs/tng50/js/export3d.js";
+import {PIVOT, parsePivot, formatPivot, parseCam, formatCam, offCentre, rayPivot, planePoint, pickAlongRay, MOVING_LADDER, pickMovingRung, createMovingGovernor} from "../../docs/ism/js/viewer3d.js";
+import * as E3D from "../../docs/ism/js/export3d.js";
 import {checker, sepHits} from "./lib/browser.mjs";
 
 const C = checker(), check = C.check;

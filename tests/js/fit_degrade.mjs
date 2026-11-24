@@ -1,10 +1,10 @@
 // degradeV model parity with the Python v2 operator (fixture), the web-path LSF against the native 0.25 km/s path
-// (Phase-3 D1; tests/js/fixtures/fit_native_cases.json), noise and the TNGS v1/v2 decoder of docs/tng50/js/fit.js
+// (Phase-3 D1; tests/js/fixtures/fit_native_cases.json), noise and the TNGS v1/v2 decoder of docs/ism/js/fit.js
 // (design-3 sections 2.4, 3.4, 5.1 and 8 U_fit 2). tests/js/fit_decode.mjs covers the crafted-blob decoder cases.
 import {readFileSync, existsSync, readdirSync} from "node:fs";
 import {join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
-import {degradeV, lsfKernel, lsfWidth, arange, decodeTNGS, seedFor, rng, gauss} from "../../docs/tng50/js/fit.js";
+import {degradeV, lsfKernel, lsfWidth, arange, decodeTNGS, seedFor, rng, gauss} from "../../docs/ism/js/fit.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = join(HERE, "..", ".."), FIX = join(HERE, "fixtures");
 const fx = JSON.parse(readFileSync(join(FIX, "fit_cases.json"), "utf8"));
@@ -120,8 +120,8 @@ const bins = Object.fromEntries(fx.meta.ids.map(id => [id, decodeTNGS(ab(readFil
   const unk = new Uint8Array(raw); unk.set(Buffer.from("FeXVII\0\0"), 16); const du = decodeTNGS(unk.buffer, Object.keys(fx.ions));
   check(du.skipped.join() === "FeXVII" && !("HI" in du.lines) && Object.keys(du.lines).length === 11, "unknown key skipped and listed in `skipped`"); }
 
-// 6. decodeTNGS v1 against the v1 page decoder (docs/tng50/_template.html), when v1 data are present
-{ const dir = join(ROOT, "docs", "tng50", "data", "s"), tpl = join(ROOT, "docs", "tng50", "_template.html");
+// 6. decodeTNGS v1 against the v1 page decoder (docs/ism/_template.html), when v1 data are present
+{ const dir = join(ROOT, "docs", "ism", "data", "s"), tpl = join(ROOT, "docs", "ism", "_template.html");
   const m = existsSync(tpl) ? readFileSync(tpl, "utf8").match(/<script id="tngsight-degrade">([\s\S]*?)<\/script>/) : null;
   const files = existsSync(dir) ? readdirSync(dir).filter(f => f.endsWith(".bin")).sort() : [];
   const v1 = files.map(f => readFileSync(join(dir, f))).filter(b => b[4] === 1).slice(0, 3);

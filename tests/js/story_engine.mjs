@@ -12,14 +12,14 @@ import path from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)), REPO = path.resolve(HERE, "../..");
-const ROOT = path.join(REPO, "docs/tng50/learn/how-a-spectrum-is-made");
+const ROOT = path.join(REPO, "docs/ism/learn/how-a-spectrum-is-made");
 const imp = p => import(pathToFileURL(path.join(ROOT, p)).href);
 const E = await imp("js/engine.js"), ST = await imp("js/store.js");
 const {createPlayDriver} = await imp("js/drivers/play.js"), {createStepDriver} = await imp("js/drivers/step.js");
 const {createExploreDriver} = await imp("js/drivers/explore.js");
 const stub = (await imp("js/scenes/stub.js")).default;
-const STATE = await import(pathToFileURL(path.join(REPO, "docs/tng50/js/state.js")).href);
-const FIT = await import(pathToFileURL(path.join(REPO, "docs/tng50/js/fit.js")).href);
+const STATE = await import(pathToFileURL(path.join(REPO, "docs/ism/js/state.js")).href);
+const FIT = await import(pathToFileURL(path.join(REPO, "docs/ism/js/fit.js")).href);
 const schema = JSON.parse(fs.readFileSync(path.join(ROOT, "steps.schema.json"), "utf8"));
 
 let fails = 0, n = 0;
@@ -325,7 +325,7 @@ const frameLog = (eng, ctx, t) => { ctx.__log.length = 0; eng.seek(t); return ct
   let unresolved = [];
   for (const f of files) for (const m of read(f).matchAll(/import\s[^"']*["'](\.[^"']+)["']/g)) if (!fs.existsSync(path.resolve(path.dirname(path.join(ROOT, f)), m[1]))) unresolved.push(`${f}: ${m[1]}`);
   eq(unresolved, [], "every relative import resolves");
-  ok(fs.existsSync(path.resolve(ROOT, "js/drivers", "../../../../js/fitworker.js")), "explore worker URL points at docs/tng50/js/fitworker.js");
+  ok(fs.existsSync(path.resolve(ROOT, "js/drivers", "../../../../js/fitworker.js")), "explore worker URL points at docs/ism/js/fitworker.js");
   const dot = files.filter(f => /·|•/.test(read(f)));
   eq(dot, [], "no dot separators in engine sources");
 }
@@ -396,7 +396,7 @@ const frameLog = (eng, ctx, t) => { ctx.__log.length = 0; eng.seek(t); return ct
 
 /* ---------------- hand-off through the explorer's own hash code ---------------- */
 {
-  const html = fs.existsSync(path.join(REPO, "docs/tng50/index.html")) ? fs.readFileSync(path.join(REPO, "docs/tng50/index.html"), "utf8") : "";
+  const html = fs.existsSync(path.join(REPO, "docs/ism/index.html")) ? fs.readFileSync(path.join(REPO, "docs/ism/index.html"), "utf8") : "";
   const m = /const DATA = (\{.*?\});\s*\n/s.exec(html);
   let cfg = null; try { cfg = m ? JSON.parse(m[1]) : null; } catch { cfg = null; }
   if (!cfg) cfg = {ions: [{key: "HI", order: 0, band: "uv"}, {key: "OVI", order: 9, band: "uv"}], bands: {uv: {R: {min: 5000, max: 150000, default: 30000, pair: [15000, 50000]}}}, defaults: {id: "edge_b100_a090"}};
@@ -492,7 +492,7 @@ const frameLog = (eng, ctx, t) => { ctx.__log.length = 0; eng.seek(t); return ct
   eq(ex.fit({}), null, "fit() needs an open step");
   ex.open(eng.indexOf("dip-1"));
   const id1 = ex.fit({id: "a"}), id2 = ex.fit({id: "b"});
-  ok(inst.url.endsWith("/docs/tng50/js/fitworker.js") && inst.o.type === "module", "module worker is the explorer's fitworker.js");
+  ok(inst.url.endsWith("/docs/ism/js/fitworker.js") && inst.o.type === "module", "module worker is the explorer's fitworker.js");
   eq(posted.map(m => m.type), ["clear", "fit", "clear", "fit"], "each fit clears the queue first (newest wins)");
   inst.onmessage({data: {type: "result", reqId: id1, result: {comps: []}}});
   inst.onmessage({data: {type: "result", reqId: id2, result: {comps: [1]}}});
@@ -543,8 +543,8 @@ async function v3StoryBrowser() {
   let base = QA.plainEdge(); if (!base) { try { base = BR.findBrowser(); } catch { base = null; } }
   if (!base) { ok(false, "v3 browser: no Chromium found (TNG_EDGE)"); return; }
   const edge = QA.edgeWith(base, QA.SWIFTSHADER_FLAGS);
-  // temp tree: docs/tng50 symlinked except the story page, which is a real copy
-  const T = mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), "r2story-")), docs = path.join(REPO, "docs/tng50"), md = path.join(T, "tng50");
+  // temp tree: docs/ism symlinked except the story page, which is a real copy
+  const T = mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), "r2story-")), docs = path.join(REPO, "docs/ism"), md = path.join(T, "tng50");
   mkdirSync(path.join(md, "learn"), {recursive: true});
   for (const e of readdirSync(docs)) if (e !== "learn") symlinkSync(path.join(docs, e), path.join(md, e));
   for (const e of readdirSync(path.join(docs, "learn"))) if (e !== "how-a-spectrum-is-made") symlinkSync(path.join(docs, "learn", e), path.join(md, "learn", e));

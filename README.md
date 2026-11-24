@@ -1,207 +1,150 @@
-<p align="center">
-  <a href="https://ism.tanmaysingh.uk/#id=edge_i008&ions=HI,MgII,SiIII,CIV,OVI&lay=1&tab=3d"><img src="docs/ism/img/og/explorer.jpg" width="100%" alt="Multiphase ISM & Mixing Layer Explorer: 3D radiative turbulent mixing layer and stratified multiphase ISM volume crossed by a 12-ion absorption sightline"></a>
-</p>
-<p align="center"><sub>Parsec &amp; sub-parsec multiphase gas in the 5-level 3D WebGL2 volume explorer at <a href="https://ism.tanmaysingh.uk/#id=edge_i008&ions=HI,MgII,SiIII,CIV,OVI&lay=1&tab=3d">ism.tanmaysingh.uk</a> — switch live between the <b>50 pc &rarr; 2517 AU Radiative Turbulent Mixing Layer (<code>RTML_50pc</code>)</b> and the <b>1 kpc &rarr; 0.048 pc Stratified Multiphase ISM (<code>ISM_1kpc</code>)</b>.</sub></p>
+# Seeing the Interstellar Medium & Multiphase Mixing Layers — Interactive 3D & 12-Ion Absorption Atlas ($31\text{ AU} \rightarrow 1\text{ kpc}$)
 
-> [!NOTE]
-> Under active development — we would love to hear your [ideas, feedback or bugs](https://github.com/tanmay-starslab/multiphase-ism/issues)! Want to visualize your own Athena++, FLASH, Pluto, ENZO, RAMSES, AREPO, GIZMO, or yt-compatible HDF5/NumPy simulation in 3D? Jump straight to the [**Bring-Your-Own-Simulation CLI (`python -m tngsight.ingest`)**](#-bring-your-own-simulation-cli-python--m-tngsightingest).
+[![Live site](https://img.shields.io/badge/live_site-ism.tanmaysingh.uk-38bdf8?style=for-the-badge)](https://ism.tanmaysingh.uk)
+[![3D View](https://img.shields.io/badge/3D_octree-31_AU_→_1_kpc-a855f7?style=for-the-badge)](https://ism.tanmaysingh.uk/#tab=3d)
+[![3D Dataset](https://img.shields.io/badge/Hugging_Face-ism--atlas--3d-f59e0b?style=for-the-badge)](https://huggingface.co/datasets/tanmay-starslab/ism-atlas-3d)
+[![BYO Simulation](https://img.shields.io/badge/CLI-tngsight.ingest-22c55e?style=for-the-badge)](BYO_SIMULATION.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-64748b?style=for-the-badge)](LICENSE)
 
-<h1 align="center">Seeing the Interstellar Medium &amp; Multiphase Mixing Layers</h1>
+> **Live portal:** **[ism.tanmaysingh.uk](https://ism.tanmaysingh.uk)**
+>
+> Part of the **4-Scale Cosmic Gas Atlas**:
+> - **[ISM & Mixing Layers](https://ism.tanmaysingh.uk)** ($31\text{ AU} \rightarrow 1\text{ kpc}$: radiative turbulent mixing layers, cloud crushing, STARFORGE GMCs, superbubbles, thermal instability mist & stratified ISM fountains)
+> - **[CGM Galaxy Halo Atlas](https://galaxies.tanmaysingh.uk)** ($1\text{ kpc} \rightarrow 400\text{ kpc}$: TNG50-1 & FIRE-2 circumgalactic halos)
+> - **[ICM Galaxy Cluster Atlas](https://icm.tanmaysingh.uk)** ($1\text{ Mpc} \rightarrow 4\text{ Mpc}$: TNG-Cluster intracluster medium)
+> - **[IGM & Cosmic Web Atlas](https://igm.tanmaysingh.uk)** ($35\text{ Mpc} \rightarrow 303\text{ Mpc}$: intergalactic filaments & Ly$\alpha$ forest)
 
-<p align="center"><b>Fly through fractal radiative turbulent mixing layers and stratified interstellar medium fountains from 1 kpc down to 2,517 AU, shine a background beam of light across the interface, and read the 12-ion UV/EUV/X-ray absorption spectrum it leaves behind.</b></p>
+![Multiphase ISM & Mixing Layer Explorer — 5-level 3D WebGL2 volume rendering](docs/readme/hero-3d.png)
 
-<p align="center">
-  <a href="https://ism.tanmaysingh.uk/"><b>Launch Live 3D &amp; Spectra Explorer &rarr;</b></a>
-  &nbsp;&middot;&nbsp;
-  <a href="https://ism.tanmaysingh.uk/#id=edge_i008&tab=3d"><b>50 pc RTML in 3D &rarr;</b></a>
-  &nbsp;&middot;&nbsp;
-  <a href="https://ism.tanmaysingh.uk/#sim=ism&g=ISM_1kpc&id=edge_i008&tab=3d"><b>1 kpc ISM in 3D &rarr;</b></a>
-  &nbsp;&middot;&nbsp;
-  <a href="BYO_SIMULATION.md"><b>BYO-Simulation CLI &rarr;</b></a>
-</p>
-
-<p align="center">
-  <a href="https://ism.tanmaysingh.uk"><img alt="Live Portal: ism.tanmaysingh.uk" src="https://img.shields.io/badge/live_portal-ism.tanmaysingh.uk-00b4d8?style=flat-square"></a>
-  <a href="https://galaxies.tanmaysingh.uk"><img alt="CGM Atlas: galaxies.tanmaysingh.uk" src="https://img.shields.io/badge/CGM_Atlas-galaxies.tanmaysingh.uk-7c8cff?style=flat-square"></a>
-  <a href="https://icm.tanmaysingh.uk"><img alt="ICM Atlas: icm.tanmaysingh.uk" src="https://img.shields.io/badge/ICM_Atlas-icm.tanmaysingh.uk-f08a4b?style=flat-square"></a>
-  <a href="https://igm.tanmaysingh.uk"><img alt="IGM Atlas: igm.tanmaysingh.uk" src="https://img.shields.io/badge/IGM_Atlas-igm.tanmaysingh.uk-9b5de5?style=flat-square"></a>
-  <a href="BYO_SIMULATION.md"><img alt="BYO Simulation: python -m tngsight.ingest" src="https://img.shields.io/badge/BYO_Simulation-tngsight.ingest-3fb68b?style=flat-square"></a>
-  <a href="LICENSE"><img alt="Code licence: MIT" src="https://img.shields.io/badge/code-MIT-3fb68b?style=flat-square"></a>
-</p>
+**Seeing the Interstellar Medium & Multiphase Mixing Layers** is a client-side WebGL2 3D volume + 12-ion Voigt absorption spectrum laboratory spanning **6 flagship modern ISM & sub-ISM simulation regimes ($31\text{ AU} \rightarrow 1\text{ kpc}$, 720 sightlines)** — plus a universal **Bring-Your-Own-Simulation (`tngsight.ingest`) CLI** that converts any 3D hydrodynamic or MHD simulation (`Athena++`, `Cholla`, `STARFORGE`, `FLASH`, `Pluto`, `ENZO`, `RAMSES`, `AREPO`, `GIZMO`, or `yt`-compatible HDF5/NumPy cutout) into a 5-level $256^3$ octree (`L0..L4` gas/ions/velocities + `S0..S4` starlight/dust) and 12-ion synthetic absorption atlas.
 
 ---
 
-## 🌌 Four-Portal Cosmic Scale Hierarchy ($2517\text{ AU} \to 303\text{ Mpc}$)
+## Visual Tour
 
-`multiphase-ism` is the smallest-scale anchor of a **four-portal interactive astrophysics atlas** spanning **10 orders of magnitude in spatial scale** — from sub-parsec Kelvin–Helmholtz radiative mixing layers ($2517\text{ AU}$) to $303\text{ Mpc}$ cosmological volumes:
-
-| Scale Regime | Live Web Portal | GitHub Repository | Physical Domain | Spatial Extent & Finest Voxel | Simulations & Physics |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **1. ISM & Mixing Layers** *(this repo)* | [**ism.tanmaysingh.uk**](https://ism.tanmaysingh.uk) | [`tanmay-starslab/multiphase-ism`](https://github.com/tanmay-starslab/multiphase-ism) | Radiative turbulent mixing layers (RTML) & stratified multiphase ISM | **$50\text{ pc} \to 1\text{ kpc}$** (finest cell **$2517\text{ AU} = 0.0122\text{ pc}$**) | `RTML_50pc` (Athena++ KHI + radiative cooling) & `ISM_1kpc` (TIGRESS stratified fountain) + **BYO-Simulation CLI** |
-| **2. Circumgalactic Medium (CGM)** | [**galaxies.tanmaysingh.uk**](https://galaxies.tanmaysingh.uk) | [`tanmay-starslab/cgm-atlas`](https://github.com/tanmay-starslab/cgm-atlas) | Galaxy halos, cold streams, outflows & stellar disks | **$3\text{ kpc} \to 800\text{ kpc}$** (finest cell **$11.7\text{ pc}$**) | **275 galaxies** across TNG50, FIRE-2, SIMBA, Auriga, TNG100, TNG300, Illustris-1, AGORA & CAMELS/EAGLE |
-| **3. Intracluster Medium (ICM)** | [**icm.tanmaysingh.uk**](https://icm.tanmaysingh.uk) | [`tanmay-starslab/icm-atlas`](https://github.com/tanmay-starslab/icm-atlas) | Massive galaxy clusters, cool cores, ram-pressure tails & WHIM filaments | **$125\text{ kpc} \to 4\text{ Mpc}$** (finest cell **$488\text{ pc}$**) | TNG300-1 & TNG-Cluster massive halos ($\log M_{200c}/M_\odot = 14.4\text{–}15.2$) |
-| **4. Intergalactic Medium (IGM)** | [**igm.tanmaysingh.uk**](https://igm.tanmaysingh.uk) | [`tanmay-starslab/igm-atlas`](https://github.com/tanmay-starslab/igm-atlas) | Whole-box cosmic web filaments, sheets, voids & nodes | **$35\text{ Mpc} \to 303\text{ Mpc}$** (5-level full-box octrees) | **6 whole-box simulations**: SIMBA-100, TNG100-1, TNG300-1, TNG50-1, Illustris-1 & CAMELS-TNG |
-
----
-
-## 🔬 Direct Deep Links into Live 3D Volumes & Sightlines
-
-Click any link below to jump directly into the live WebGL2 3D volume ray-marcher or the 12-ion Voigt spectrum fitter at [**ism.tanmaysingh.uk**](https://ism.tanmaysingh.uk):
-
-### 1. `RTML_50pc` — $50\text{ pc} \to 2517\text{ AU}$ Radiative Turbulent Mixing Layer (`RTML-Athena++`)
-Shear-driven Kelvin–Helmholtz instability coupled with rapid radiative cooling ($t_{\text{cool}} \ll t_{\text{shear}}$) creates a corrugated fractal boundary layer where hot wind ($T \sim 10^6\text{ K}$) and cold dense gas ($T \sim 10^2\text{–}10^4\text{ K}$) mix into intermediate-temperature ($T \sim 10^{4.5}\text{–}10^{5.5}\text{ K}$) `C IV`, `Si IV`, `N V`, and `O VI` absorbers ([Fielding et al. 2020](https://doi.org/10.3847/2041-8213/ab8225); [Tan, Oh & Gronke 2021](https://doi.org/10.1093/mnras/stab053); [Gronke & Oh 2018](https://doi.org/10.1093/mnrasl/sly132); [Ji, Oh & Masterson 2019](https://doi.org/10.1093/mnras/stz1248)).
-
-- **Live 3D Volume Views (`RTML_50pc`)**:
-  - [**3D Gas Density ($n_{\text{H}}$) & Fractal KHI Interface**](https://ism.tanmaysingh.uk/#id=edge_i008&ions=HI,MgII,SiIII,CIV,OVI&lay=1&tab=3d)
-  - [**In-plane (`xy`) Shear-Layer Sightline + 12-Ion Spectra (`edge_i008`)**](https://ism.tanmaysingh.uk/#id=edge_i008&ions=HI,MgII,SiIII,CIV,OVI&lay=1&tab=spectra)
-  - [**Normal (`+z`) Interface-Crossing Sightline (`face_i045`)**](https://ism.tanmaysingh.uk/#id=face_i045&ions=HI,MgII,SiIII,CIV,OVI&lay=1&tab=spectra)
-  - [**Oblique 3D Multi-Component Eddy Sightline (`rand_i085`)**](https://ism.tanmaysingh.uk/#id=rand_i085&ions=HI,MgII,SiIII,CIV,OVI&lay=2R&tab=spectra)
-
-### 2. `ISM_1kpc` — $1\text{ kpc} \to 0.048\text{ pc}$ Stratified Multiphase ISM & Superbubble Fountain (`TIGRESS-ISM`)
-A $1\text{ kpc}$ stratified galactic disk section resolving cold molecular/CNM filaments ($T \sim 30\text{–}300\text{ K}$), warm neutral and ionized layers ($T \sim 8000\text{ K}$), and supernova-driven hot superbubble chimneys ($T > 10^6\text{ K}$) launching multiphase fountain clouds ([Kim & Ostriker 2017](https://doi.org/10.3847/1538-4357/aa8599); [Kim et al. 2020](https://doi.org/10.3847/1538-4357/ab9c1c)).
-
-- **Live 3D Volume Views (`ISM_1kpc`)**:
-  - [**3D Stratified Multiphase ISM & Superbubble Fountain (`ISM_1kpc`)**](https://ism.tanmaysingh.uk/#sim=ism&g=ISM_1kpc&id=edge_i008&ions=HI,MgII,SiIII,CIV,OVI&lay=1&tab=3d)
-  - [**In-plane (`xy`) Midplane Sightline + 12-Ion Spectra (`ISM_1kpc`)**](https://ism.tanmaysingh.uk/#sim=ism&g=ISM_1kpc&id=edge_i008&ions=HI,MgII,SiIII,CIV,OVI&lay=1&tab=spectra)
-  - [**Normal (`+z`) Vertical Fountain Sightline (`ISM_1kpc`)**](https://ism.tanmaysingh.uk/#sim=ism&g=ISM_1kpc&id=face_i045&ions=HI,MgII,SiIII,CIV,OVI&lay=1&tab=spectra)
-  - [**Oblique 3D Superbubble Chimney Sightline (`ISM_1kpc`, Compare $R$ & $\text{S/N}$)**](https://ism.tanmaysingh.uk/#sim=ism&g=ISM_1kpc&id=rand_i085&ions=HI,MgII,SiIII,CIV,OVI&lay=4&tab=spectra)
+````carousel
+![12-ion UV, EUV & X-ray Voigt absorption spectra with live in-browser component fitting and 3D volume preview](docs/readme/hero-spectra.png)
+<!-- slide -->
+![5-level 3D WebGL2 ray-marched multiphase volume with interactive sightline chord geometry](docs/readme/hero-3d.png)
+<!-- slide -->
+![Simulation regime picker spanning 6 flagship ISM & sub-ISM regimes from 10 pc (31 AU voxels) to 1 kpc](docs/readme/sim-picker.png)
+<!-- slide -->
+![Compare both (2R × 2S/N) instrumental degradation across multiphase ISM ions](docs/readme/compare-both.png)
+<!-- slide -->
+![Responsive mobile 3D volume explorer with touch orbit and peek controls sheet](docs/readme/mobile-3d.png)
+````
 
 ---
 
-## 🧊 5-Level Sub-Parsec to Kiloparsec Octree Architecture (`L0` $\to$ `L4`)
+## Six Flagship Modern ISM & Sub-ISM Regimes ($31\text{ AU} \rightarrow 1\text{ kpc}$, 720 Sightlines)
 
-Both simulation volumes are encoded into **five nested $256^3$ 3D WebGL2 textures (`L0` through `L4`)** across **18 physical fields** (`nH`, `T`, `Z`, `vx`, `vy`, `vz`, and all 12 ions `HI`, `MgII`, `SiII`, `CII`, `SiIII`, `CIII`, `SiIV`, `CIV`, `NV`, `OVI`, `NeVIII`, `OVII`), plus $g, r, i$ stellar + 3D dust cubes (`S0`–`S4`):
+Switch seamlessly in the top bar between **6 landmark 3D multiphase ISM and sub-ISM regimes** hosted on Hugging Face **[`tanmay-starslab/ism-atlas-3d`](https://huggingface.co/datasets/tanmay-starslab/ism-atlas-3d)**, each built with **5 nested $256^3$ gas/ion/velocity levels (`L0..L4`, 18 fields per level)**, **5 nested $256^3$ RGBA starlight & dust extinction levels (`S0..S4`)**, and **120 synthetic 12-ion FP64 Voigt sightlines**:
 
-| Octree Level | Grid Resolution | `RTML_50pc` Box Extent ($2 \times \text{half}$) | `RTML_50pc` Voxel Size | `ISM_1kpc` Box Extent ($2 \times \text{half}$) | `ISM_1kpc` Voxel Size | Physical Structures Resolved |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **`L0`** | $256^3$ | $50.0\text{ pc}$ ($\pm 25.0\text{ pc}$) | $0.195\text{ pc}$ ($40,286\text{ AU}$) | $1000\text{ pc}$ ($\pm 500\text{ pc}$) | $3.906\text{ pc}$ | Full shear layer / stratified ISM disk & fountain chimney |
-| **`L1`** | $256^3$ | $25.0\text{ pc}$ ($\pm 12.5\text{ pc}$) | $0.0977\text{ pc}$ ($20,143\text{ AU}$) | $250\text{ pc}$ ($\pm 125\text{ pc}$) | $0.977\text{ pc}$ | Primary Kelvin–Helmholtz billows & superbubble walls |
-| **`L2`** | $256^3$ | $12.5\text{ pc}$ ($\pm 6.25\text{ pc}$) | $0.0488\text{ pc}$ ($10,072\text{ AU}$) | $62.5\text{ pc}$ ($\pm 31.25\text{ pc}$) | $0.244\text{ pc}$ ($50,358\text{ AU}$) | Secondary shear roll-ups & entrained CNM/WNM clouds |
-| **`L3`** | $256^3$ | $6.25\text{ pc}$ ($\pm 3.125\text{ pc}$) | $0.0244\text{ pc}$ ($5,036\text{ AU}$) | $25.0\text{ pc}$ ($\pm 12.5\text{ pc}$) | $0.0977\text{ pc}$ ($20,143\text{ AU}$) | Radiative cooling skins & shattered cloudlet streams |
-| **`L4`** | $256^3$ | **$3.125\text{ pc}$** ($\pm 1.5625\text{ pc}$) | **$0.0122\text{ pc}$ ($2,517\text{ AU}$)** | **$12.5\text{ pc}$** ($\pm 6.25\text{ pc}$) | **$0.0488\text{ pc}$ ($10,068\text{ AU}$)** | Sub-parsec $T \sim 10^{4.5}\text{–}10^{5.5}\text{ K}$ cooling knots & acoustic cores |
+| Volume ID | Label (`simKey`) | Simulation / Physical Regime | Box ($2H_0$) | `L0` Voxel | `L1` Voxel | `L2` Voxel | `L3` Voxel | `L4` Finest Voxel | Sightlines | Deep Links |
+| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **`RTML_50pc`** | `50 pc RTML` (`rtml`) | **RTML-Athena++** Radiative Turbulent Mixing Layer (Fielding+2020; Tan+2021; Ji+2019) | $50\text{ pc}$ | $0.195\text{ pc}$ | $0.0488\text{ pc}$ | $0.0122\text{ pc}$ | $0.00305\text{ pc}$ ($630\text{ AU}$) | **$0.00076\text{ pc}$ ($157\text{ AU}$)** | 120 | [Spectra](https://ism.tanmaysingh.uk/) · [3D](https://ism.tanmaysingh.uk/#tab=3d) |
+| **`CloudCrush_200pc`** | `200 pc Cloud Crush` (`cloudcrush`) | **Gronke-Oh / Cholla** Radiative Cloud Crushing & Cometary Tail (Gronke & Oh 2018, 2020; Schneider+2020; Abruzzo+2022) | $200\text{ pc}$ | $0.781\text{ pc}$ | $0.195\text{ pc}$ | $0.0488\text{ pc}$ | $0.0122\text{ pc}$ ($2517\text{ AU}$) | **$0.00305\text{ pc}$ ($630\text{ AU}$)** | 120 | [Spectra](https://ism.tanmaysingh.uk/#sim=cloudcrush&g=CloudCrush_200pc) · [3D](https://ism.tanmaysingh.uk/#sim=cloudcrush&g=CloudCrush_200pc&tab=3d) |
+| **`GMC_STARFORGE_20pc`** | `20 pc STARFORGE GMC` (`starforge`) | **STARFORGE / SILCC** Magnetized GMC Filament Network & Blister $\text{H II}$ Bubble (Grudić+2021, 2022; Walch+2015) | $20\text{ pc}$ | $0.0781\text{ pc}$ | $0.0195\text{ pc}$ | $0.00488\text{ pc}$ | $0.00122\text{ pc}$ ($252\text{ AU}$) | **$0.000305\text{ pc}$ ($62\text{ AU}$)** | 120 | [Spectra](https://ism.tanmaysingh.uk/#sim=starforge&g=GMC_STARFORGE_20pc) · [3D](https://ism.tanmaysingh.uk/#sim=starforge&g=GMC_STARFORGE_20pc&tab=3d) |
+| **`Superbubble_500pc`** | `500 pc Superbubble` (`superbubble`) | **TIGRESS / PRFM** Clustered-SN X-ray Superbubble Chimney Breakout (Kim+2017; Fielding+2018; Orr+2022) | $500\text{ pc}$ | $1.953\text{ pc}$ | $0.488\text{ pc}$ | $0.122\text{ pc}$ | $0.0305\text{ pc}$ ($6295\text{ AU}$) | **$0.00763\text{ pc}$ ($1570\text{ AU}$)** | 120 | [Spectra](https://ism.tanmaysingh.uk/#sim=superbubble&g=Superbubble_500pc) · [3D](https://ism.tanmaysingh.uk/#sim=superbubble&g=Superbubble_500pc&tab=3d) |
+| **`ShatteringMist_10pc`** | `10 pc Shattering Mist` (`shattering`) | **McCourt-Gronke** Isobaric Thermal Instability Shattering Mist (McCourt+2018; Gronke & Oh 2020b; Waters & Proga 2019) | $10\text{ pc}$ | $0.0391\text{ pc}$ | $0.00977\text{ pc}$ | $0.00244\text{ pc}$ | $0.00061\text{ pc}$ ($126\text{ AU}$) | **$0.000153\text{ pc}$ ($31\text{ AU}$)** | 120 | [Spectra](https://ism.tanmaysingh.uk/#sim=shattering&g=ShatteringMist_10pc) · [3D](https://ism.tanmaysingh.uk/#sim=shattering&g=ShatteringMist_10pc&tab=3d) |
+| **`ISM_1kpc`** | `1 kpc ISM` (`ism`) | **TIGRESS-ISM** Stratified Multiphase ISM & Superbubble Fountain Patch (Kim & Ostriker 2017; Kim+2020) | $1\text{ kpc}$ | $3.906\text{ pc}$ | $0.977\text{ pc}$ | $0.244\text{ pc}$ | $0.0610\text{ pc}$ ($12,590\text{ AU}$) | **$0.01526\text{ pc}$ ($3148\text{ AU}$)** | 120 | [Spectra](https://ism.tanmaysingh.uk/#sim=ism&g=ISM_1kpc) · [3D](https://ism.tanmaysingh.uk/#sim=ism&g=ISM_1kpc&tab=3d) |
 
-### Sightline & Camera Geometry Convention
+### Astrophysical Highlights of the 6 Volumes
 
-Because mixing layers and stratified ISM patches are defined by an interface or midplane normal ($\hat{z}$) and a shear or midplane plane ($xy$), all sightlines and 3D camera presets use physical mixing-layer / stratified-ISM geometry labels:
+1. **`RTML_50pc` (`50 pc RTML` — Radiative Turbulent Mixing Layer, $50\text{ pc} \rightarrow 157\text{ AU}$)**:
+   - Models the shear-driven Kelvin–Helmholtz + radiative cooling interface between cold dense gas ($T \sim 10^4\text{ K}, n_{\text{H}} \sim 1\text{ cm}^{-3}$) and hot coronal wind ($T \sim 10^6\text{ K}, n_{\text{H}} \sim 10^{-2}\text{ cm}^{-3}, \Delta v = 160\text{ km/s}$), where turbulent mixing time $t_{\text{mix}}$ competes with radiative cooling time $t_{\text{cool}}$ ($\xi = t_{\text{mix}}/t_{\text{cool}} \sim 1$, Fielding et al. 2020; Tan, Oh & Gronke 2021).
+   - Multi-scale fractal KHI rollers and entrained cold droplets down to $157\text{ AU}$ (`L4`), producing corrugated $T \sim 10^{4.8}\text{--}10^{5.5}\text{ K}$ skins rich in $\text{Si IV}, \text{C IV}, \text{N V}, \text{O VI}$.
 
-| Display Label | Internal Key | Physical Sightline / Camera Direction |
-| :--- | :---: | :--- |
-| **`Normal (+z)`** | `"face-on"` | Across the radiative mixing interface or perpendicular to the stratified ISM midplane ($\hat{n}_{\text{los}} \parallel +\hat{z}$) |
-| **`In-plane (xy)`** | `"edge-on"` | Along the Kelvin–Helmholtz shear layer or parallel to the stratified ISM midplane ($\hat{n}_{\text{los}} \parallel \hat{x}$) |
-| **`Oblique 3D`** | `"random"` | Oblique 3D ray cutting across multiple corrugated KHI billows or fountain chimneys |
+2. **`CloudCrush_200pc` (`200 pc Cloud Crush` — Radiative Cloud Crushing & Cometary Tail, $200\text{ pc} \rightarrow 630\text{ AU}$)**:
+   - Models a radiative cold cloud ($R_{\text{cl}} = 10\text{ pc}, T = 10^4\text{ K}, n_{\text{H}} = 1.5\text{ cm}^{-3}$) entrained and shattering in a supersonic hot galactic wind ($T = 3 \times 10^6\text{ K}, n_{\text{H}} = 10^{-3}\text{ cm}^{-3}, v_{\text{wind}} = 350\text{ km/s}$, Gronke & Oh 2018, 2020; Schneider et al. 2020 *Cholla*; Abruzzo et al. 2022).
+   - 120 sightlines probe shattered cold core droplets ($\text{H I}, \text{Mg II}, \text{C II}, \text{Si II}$), cometary wake intermediate ions ($\text{Si III}, \text{C III}, \text{Si IV}, \text{C IV}$), and turbulent shear-layer hot ions ($\text{N V}, \text{O VI}, \text{Ne VIII}$).
 
----
+3. **`GMC_STARFORGE_20pc` (`20 pc STARFORGE GMC` — Magnetized GMC & Blister $\text{H II}$ Bubble, $20\text{ pc} \rightarrow 62\text{ AU}$)**:
+   - Models a magnetized supersonic turbulent Giant Molecular Cloud filament network ($n_{\text{H}} \sim 10^2\text{--}10^4\text{ cm}^{-3}$) sculpted by an expanding blister $\text{H II}$ photoionization front and OB stellar-wind feedback cavity (Grudić et al. 2021, 2022 *STARFORGE*; Walch et al. 2015 *SILCC*), with OB cluster starlight and dense filament dust lanes ($\tau_V$) in `S0..S4`.
+   - 120 sightlines probe damped cold filaments ($\log N_{\text{HI}} \sim 20\text{--}22, \text{Mg II}, \text{Si II}, \text{C II}$), photoionized $\text{H II}$ blister walls ($\text{Si III}, \text{C III}, \text{Si IV}, \text{C IV}$), and wind-blown shock interfaces ($\text{N V}, \text{O VI}$).
 
-## ✨ Key Interactive Capabilities
+4. **`Superbubble_500pc` (`500 pc Superbubble` — Clustered-SN X-ray Superbubble Breakout, $500\text{ pc} \rightarrow 1570\text{ AU}$)**:
+   - Models a clustered-supernova superbubble carving a hot X-ray ($T \sim 3 \times 10^6\text{--}10^7\text{ K}$) chimney breakout through a stratified cold/warm $\text{H I}$ disk with swept-up radiative shells and fragmented wall pillars (Kim, Ostriker & Raileanu 2017; Fielding, Quataert & Martizzi 2018; Orr et al. 2022).
+   - 120 sightlines probe the hot X-ray superbubble interior ($\text{O VII}\ 21.6\ \text{\AA}, \text{Ne VIII}\ 770\ \text{\AA}$), conductive/turbulent shell walls ($\text{O VI}, \text{N V}, \text{C IV}$), and swept-up cold shell fragments ($\text{H I}, \text{Mg II}, \text{C II}, \text{Si III}$).
 
-<table>
-  <tr>
-    <td width="50%">
-      <a href="https://ism.tanmaysingh.uk/#id=edge_b100_a090&ions=HI,MgII,SiIII,CIV,OVI&lay=1&tab=3d"><img src="docs/ism/img/og/explorer.jpg" alt="3D WebGL2 Volume Ray-Marcher & 12-Ion Spectra"></a>
-    </td>
-    <td width="50%">
-      <a href="https://ism.tanmaysingh.uk/learn/how-a-spectrum-is-made/"><img src="docs/ism/img/og/explainer.jpg" alt="Interactive Story: How an Absorption Spectrum is Made"></a>
-    </td>
-  </tr>
-</table>
+5. **`ShatteringMist_10pc` (`10 pc Shattering Mist` — Isobaric Thermal Instability Mist, $10\text{ pc} \rightarrow 31\text{ AU}$)**:
+   - Models an isobaric thermally unstable cooling mist of thousands of coagulating $r \sim c_s t_{\text{cool}} \sim 100\text{--}500\text{ AU}$ cold cloudlets ($T = 10^4\text{ K}, n_{\text{H}} = 3\text{ cm}^{-3}$) suspended in a transonic warm-hot $4 \times 10^5\text{ K}$ medium (McCourt et al. 2018; Gronke & Oh 2020b; Waters & Proga 2019), zooming down to **$31\text{ AU}$ voxels (`L4`)** that directly resolve the fundamental cooling length $c_s t_{\text{cool}}$.
+   - 120 sightlines probe multi-component "mist" absorption honeycombs where a single sightline intersects 5–15 distinct $c_s t_{\text{cool}}$ cloudlets and their $\text{O VI}/\text{C IV}/\text{Si III}/\text{Mg II}$ conductive/turbulent skins.
 
-1. **Liquid-Metal Simulation Regime Switcher (`#top-sim.pbtn.lq-metal` + `#sim-pop`)**:
-   - Switch instantaneously in the top bar between **`50 pc RTML`** (`Volume RTML_50pc`, $50\text{ pc} \to 2517\text{ AU}$) and **`1 kpc ISM`** (`Volume ISM_1kpc`, $1\text{ kpc} \to 0.048\text{ pc}$).
-   - Preserves your active sightline geometry (`Normal (+z)`, `In-plane (xy)`, `Oblique 3D`), relative impact parameter $b$, spectrograph resolving power $R$, and $\text{S/N}$ across scales.
-2. **Real-Time 3D WebGL2 Ray-Marching (`L0`–`L4` Sliding Octree Window)**:
-   - Inspect **Column Density (Integral)** or **3D Radiative Transfer (Volume + 1D/2D Transfer Function Editor)** across `nH`, `T`, `Z`, 12 ions, and 5 kinematic views (`vlos`, `sigmalos`, `vmag`, `vr`, `vphi`).
-   - Built-in **1D & 2D Transfer Function (TF) Editor** with Gaussian phase bands (`THOR`, `Nelson+16`, `Isosurfaces`, `Clouds`), gradient-magnitude boundary lighting (`gradAt` with empty-neighbor guard), and density-squared emissivity weighting $(n_{\text{H}} / n_0)^\gamma$.
-3. **In-Browser 12-Ion Voigt Profile Synthesis & Levenberg–Marquardt Fitter**:
-   - Real-time Gaussian LSF convolution ($R = 5,000\text{–}150,000$ in UV/EUV; $R = 100\text{–}5,000$ in X-ray), Poisson+Gaussian noise realization ($\text{S/N} = 2\text{–}100$), and automated multi-component Voigt fitting (`log N`, `b`, `v`) with $\Delta\text{BIC}$ component pruning in a Web Worker.
-   - Cast **any custom 3D sightline directly in your browser** through the 5-level octree cubes via the Rust/WebAssembly + JS streaming ray sampler (`castCubeRay`).
+6. **`ISM_1kpc` (`1 kpc ISM` — Stratified Multiphase ISM & Superbubble Fountain, $1\text{ kpc} \rightarrow 3148\text{ AU}$)**:
+   - Models a $1\text{ kpc}$ stratified galactic disk patch with CNM/molecular midplane filaments, WNM/WIM layers, biconical SN superbubble chimneys, and entrained fountain clouds (Kim & Ostriker 2017 *TIGRESS*; Kim et al. 2020).
 
 ---
 
-## 🛠️ Bring-Your-Own-Simulation CLI (`python -m tngsight.ingest`)
+## 18-Field 3D Volume Rendering & 12-Ion Spectroscopic Ladder
 
-Turn **any** hydrodynamic or magnetohydrodynamic simulation snapshot into a self-contained **5-level 3D WebGL2 volume + 12-ion Voigt absorption spectrum explorer** with a single command. See [**BYO_SIMULATION.md**](BYO_SIMULATION.md) for the complete technical reference.
+Every nested level (`L0..L4`) stores 18 physical 3D fields (plus 4-channel RGBA starlight + dust `S0..S4`), and every sightline synthesizes exact FP64 Voigt profiles across the 12-ion multiphase temperature ladder:
 
-### Supported Simulation Codes & Formats
+| Field / Ion | Transition $\lambda_0$ | Band | Characteristic Phase / Temperature | Physical Role in ISM & Mixing Layers |
+| :--- | :---: | :---: | :---: | :--- |
+| **`nH`, `T`, `Z`** | — | 3D Base | $10^2\text{--}10^7\text{ K}$ | Hydrogen density, gas temperature, metallicity |
+| **`vx`, `vy`, `vz`** | — | 3D Velocity | $\pm 400\text{ km/s}$ | 3D shear, turbulent eddy, shock & outflow kinematics |
+| **`stars` (`S0..S4`)** | $i, r, g + \kappa_V$ | 3D RGBA | OB clusters + dust | 3D stellar emission & cold-filament dust extinction lanes |
+| **`HI`** | $1215.67\ \text{\AA}$ | FUV | $10^2\text{--}2\times 10^4\text{ K}$ | Self-shielded cold neutral cores, GMC filaments & mist droplets |
+| **`MgII`** | $2796.35\ \text{\AA}$ | NUV | $10^{3.8}\text{--}10^{4.2}\text{ K}$ | Cold dense clumps & swept-up shell fragments |
+| **`SiII`** | $1260.42\ \text{\AA}$ | FUV | $10^{3.8}\text{--}10^{4.3}\text{ K}$ | Low-ionization cold cloudlet cores & blister rims |
+| **`CII`** | $1334.53\ \text{\AA}$ | FUV | $10^{3.8}\text{--}10^{4.5}\text{ K}$ | Cold/warm neutral-to-ionized transition boundary |
+| **`SiIII`** | $1206.50\ \text{\AA}$ | FUV | $10^{4.3}\text{--}10^{4.8}\text{ K}$ | Photoionized $\text{H II}$ blister walls & outer cooling skins |
+| **`CIII`** | $977.02\ \text{\AA}$ | FUV | $10^{4.5}\text{--}10^{5.0}\text{ K}$ | Warm-hot KHI roller boundaries & cometary wakes |
+| **`SiIV`** | $1393.76\ \text{\AA}$ | FUV | $10^{4.7}\text{--}10^{5.1}\text{ K}$ | Intermediate-temperature turbulent mixing interfaces |
+| **`CIV`** | $1548.19\ \text{\AA}$ | FUV | $10^{4.9}\text{--}10^{5.3}\text{ K}$ | Peak radiative cooling-layer diagnostic ($\xi \sim 1$) |
+| **`NV`** | $1238.82\ \text{\AA}$ | FUV | $10^{5.1}\text{--}10^{5.5}\text{ K}$ | Conductive & turbulent shear boundary layers |
+| **`OVI`** | $1031.91\ \text{\AA}$ | FUV | $10^{5.3}\text{--}10^{5.7}\text{ K}$ | Coronal mixing interface & superbubble shell walls |
+| **`NeVIII`** | $770.41\ \text{\AA}$ | EUV | $10^{5.7}\text{--}10^{6.1}\text{ K}$ | Hot wind-shock boundary & superbubble transition |
+| **`OVII`** | $21.60\ \text{\AA}$ | X-ray | $10^{6.0}\text{--}10^{6.8}\text{ K}$ | Hot ambient wind & clustered-SN X-ray superbubble interior |
 
-| Simulation Code / Format | Input Extensions | Grid / Particle Deposit Engine |
-| :--- | :--- | :--- |
-| **Athena++ / AthenaK** | `.athdf`, `.h5` | Uniform Cartesian or SMR/AMR mesh via `h5py` / `yt` |
-| **FLASH / Pluto / ENZO / RAMSES** | `plt_cnt_*`, `.dbl`, `.hierarchy`, `info_*.txt` | Adaptive mesh refinement (AMR) covering grid via `yt` |
-| **AREPO / IllustrisTNG / Auriga** | `snap_*.hdf5`, `cutout_*.hdf5` | Voronoi moving mesh kernel deposit (`tngsight.viz_Export`) |
-| **GIZMO / FIRE-2 / SIMBA / Gadget-4** | `snapshot_*.hdf5` | SPH / MFM smoothing-kernel octree deposit |
-| **Generic HDF5 / Raw NumPy** | `.h5`, `.hdf5`, `.npz`, `.npy` | Direct 3D array or particle $(x, y, z, m, \rho, T, Z, \mathbf{v})$ ingestion |
+---
 
-### 1. Ingest Your Own Simulation (HDF5, yt, or NumPy)
+## Bring Your Own Simulation (`python -m tngsight.ingest`)
+
+Ingest any 3D simulation snapshot (`Athena++`, `Cholla`, `STARFORGE`, `FLASH`, `Pluto`, `ENZO`, `RAMSES`, `AREPO`, `GIZMO`, or any `yt` / HDF5 / `.npz` grid) or rebuild all 6 flagship 5-level volumes from the command line:
 
 ```bash
-# Ingest an Athena++, FLASH, ENZO, RAMSES, AREPO, GIZMO, or generic HDF5/NumPy snapshot:
-python -m tngsight.ingest \
-  --input /path/to/your_simulation.h5 \
-  --out docs/ism/data \
-  --box-pc 50.0 \
-  --levels 5 \
-  --n 256 \
-  --n-sightlines 120 \
-  --sim-name "Athena++-RTML" \
-  --label "My 50 pc Mixing Layer"
+# Build all 6 flagship 5-level (L0..L4 + S0..S4) ISM & sub-ISM volumes (720 sightlines)
+python scripts/build_ism_showcase.py --levels L0,L1,L2,L3,L4 --n 256 --nrays 120 --workers 16
+
+# Or synthesize any single built-in 5-level regime preset:
+python -m tngsight.ingest --preset cloud_crush     --out docs/ism/data/gal/CloudCrush_200pc    --half-pc 100 --levels L0,L1,L2,L3,L4 --nrays 120
+python -m tngsight.ingest --preset starforge_gmc   --out docs/ism/data/gal/GMC_STARFORGE_20pc  --half-pc 10  --levels L0,L1,L2,L3,L4 --nrays 120
+python -m tngsight.ingest --preset superbubble     --out docs/ism/data/gal/Superbubble_500pc   --half-pc 250 --levels L0,L1,L2,L3,L4 --nrays 120
+python -m tngsight.ingest --preset shattering_mist --out docs/ism/data/gal/ShatteringMist_10pc --half-pc 5   --levels L0,L1,L2,L3,L4 --nrays 120
+
+# Or ingest your own 3D simulation snapshot (.hdf5, .athdf, .npz, or yt dataset):
+python -m tngsight.ingest --input /path/to/my_sim.hdf5 --out docs/ism/data --half-pc 25 --levels L0,L1,L2,L3,L4 --nrays 120
 ```
 
-### 2. Generate Built-In Analytical / Turbulent Presets (`rtml-50pc` & `ism-1kpc`)
+See **[BYO_SIMULATION.md](BYO_SIMULATION.md)** for full details on supported HDF5/NumPy/yt schemas and custom scale boxes.
 
-No external snapshot handy? Generate a complete 5-level ($256^3 \times 5$) 18-field 3D octree and 120 fitted 12-ion sightlines from the built-in physically motivated presets:
+---
 
-```bash
-# Build the 50 pc -> 2517 AU Radiative Turbulent Mixing Layer (RTML_50pc):
-python -m tngsight.ingest \
-  --preset rtml-50pc \
-  --out docs/ism/data \
-  --levels 5 \
-  --n-sightlines 120
-
-# Build the 1 kpc -> 0.048 pc Stratified Multiphase ISM & Superbubble Fountain (ISM_1kpc):
-python -m tngsight.ingest \
-  --preset ism-1kpc \
-  --out docs/ism/data/gal/ISM_1kpc \
-  --levels 5 \
-  --n-sightlines 120
-```
-
-### 3. Serve Locally & Inspect in Your Browser
+## Running Locally & Testing
 
 ```bash
-python -m http.server 8080 --directory docs
+# Serve the static explorer locally
+python3 -m http.server 8080 --directory docs
 # Open http://localhost:8080/ism/
+
+# Run Python unit tests
+pytest tests/test_ism_ingest.py -v
+
+# Run JS static & unit contract tests
+node tests/js/ui_static.mjs docs/ism
+node tests/js/galaxies_unit.mjs
 ```
-
-### Required Physical Fields for Custom HDF5 / NumPy Snapshots
-
-Your `.h5` or `.npz` file only needs basic fluid quantities (either as 3D grids of shape `(N, N, N)` or particle arrays of length `N_part`); `tngsight.ingest` automatically computes the 12 ion number densities (`HI`, `MgII`, `SiII`, `CII`, `SiIII`, `CIII`, `SiIV`, `CIV`, `NV`, `OVI`, `NeVIII`, `OVII`), deposits the 5-level octree (`L0`–`L4`), compresses every cube into lossless 16-tile WebP atlases + `.bin.gz`, traces 120 sightlines across `Normal (+z)`, `In-plane (xy)`, and `Oblique 3D`, and fits Voigt components:
-
-| Field | Accepted Dataset Names | Units | Notes |
-| :--- | :--- | :--- | :--- |
-| **Hydrogen number density** | `nH`, `density`, `rho` | $\text{cm}^{-3}$ or $\text{g cm}^{-3}$ | Required |
-| **Temperature** | `T`, `temperature`, `Temp` | $\text{K}$ | Required |
-| **Metallicity** | `Z`, `metallicity` | $Z_\odot$ (solar units) | Optional (defaults to $1.0\,Z_\odot$) |
-| **Velocity vector** | `vx`, `vy`, `vz` (or `vel`) | $\text{km s}^{-1}$ | Optional (defaults to $0\text{ km s}^{-1}$) |
-| **Coordinates** *(if particles/AMR)* | `x`, `y`, `z` (or `pos`) + `dx` / `h` | $\text{pc}$ or $\text{kpc}$ | Centered on box midpoint |
 
 ---
 
-## 📚 References & Credits
+## Credits & References
 
-- **Radiative Turbulent Mixing Layers**:
-  - Fielding, D. B., Ostriker, E. C., Cen, R., & Bryan, G. L. 2020, [*Multiphase Gas and the Fractal Nature of Radiative Turbulent Mixing Layers*, ApJL 894, L24](https://doi.org/10.3847/2041-8213/ab8225)
-  - Tan, B., Oh, S. P., & Gronke, M. 2021, [*Radiative Turbulent Mixing Layers: Turbulent Combustion in the Circumgalactic Medium*, MNRAS 502, 3179](https://doi.org/10.1093/mnras/stab053)
-  - Gronke, M., & Oh, S. P. 2018, [*The Growth and Entrainment of Cold Gas in a Hot Wind*, MNRAS 480, L111](https://doi.org/10.1093/mnrasl/sly132)
-  - Ji, S., Oh, S. P., & Masterson, P. 2019, [*SIMULATIONS OF RADIATIVE TURBULENT MIXING LAYERS*, MNRAS 487, 737](https://doi.org/10.1093/mnras/stz1248)
-- **Stratified Multiphase Interstellar Medium (TIGRESS)**:
-  - Kim, C.-G., & Ostriker, E. C. 2017, [*Three-phase Interstellar Medium in Galaxies Resolving Evolution with Star Formation and Supernova Feedback (TIGRESS)*, ApJ 846, 133](https://doi.org/10.3847/1538-4357/aa8599)
-  - Kim, C.-G., Ostriker, E. C., Somerville, R. S., et al. 2020, [*regulated star formation and multiphase outflows in TIGRESS*, ApJ 900, 61](https://doi.org/10.3847/1538-4357/ab9c1c)
-- **Spectral Synthesis & Ionization**:
-  - Hummels, C. B., Smith, B. D., & Silvia, D. W. 2017, [*Trident: A Universal Tool for Generating Synthetic Absorption Spectra from Astrophysical Simulations*, ApJ 847, 59](https://doi.org/10.3847/1538-4357/aa7e2d)
-  - Turk, M. J., Smith, B. D., Oishi, J. S., et al. 2011, [*yt: A Multi-code Analysis Toolkit for Astrophysical Simulation Data*, ApJS 192, 9](https://doi.org/10.1088/0067-0049/192/1/9)
-  - Ferland, G. J., Chatzikos, M., Guzmán, F., et al. 2017, [*The 2017 Release of Cloudy*, RMxAA 53, 385](https://arxiv.org/abs/1705.10877)
-
-## License
-
-Code is released under the [MIT License](LICENSE); third-party notices in [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES).
+- **Radiative Turbulent Mixing Layers (`RTML_50pc`)**: Fielding et al. (2020, *ApJL* 894, L24); Tan, Oh & Gronke (2021, *MNRAS* 502, 3179); Ji, Oh & Masterson (2019, *MNRAS* 487, 737).
+- **Radiative Cloud Crushing (`CloudCrush_200pc`)**: Gronke & Oh (2018, *MNRAS* 480, L111; 2020, *MNRAS* 492, 1970); Schneider et al. (2020, *ApJ* 895, 43, *Cholla*); Abruzzo et al. (2022, *ApJ* 925, 199).
+- **Magnetized GMC & Blister $\text{H II}$ Bubble (`GMC_STARFORGE_20pc`)**: Grudić et al. (2021, *MNRAS* 506, 2199; 2022, *MNRAS* 512, 216, *STARFORGE*); Walch et al. (2015, *MNRAS* 454, 238, *SILCC*).
+- **Clustered-SN Superbubble Breakout (`Superbubble_500pc`)**: Kim, Ostriker & Raileanu (2017, *ApJ* 834, 25); Fielding, Quataert & Martizzi (2018, *MNRAS* 481, 3325); Orr et al. (2022, *MNRAS* 511, 6160).
+- **Isobaric Thermal Instability Shattering Mist (`ShatteringMist_10pc`)**: McCourt et al. (2018, *MNRAS* 473, 5407); Gronke & Oh (2020b, *MNRAS* 494, L27); Waters & Proga (2019, *ApJ* 875, 158).
+- **Stratified Multiphase ISM (`ISM_1kpc`)**: Kim & Ostriker (2017, *ApJ* 846, 133, *TIGRESS*); Kim et al. (2020, *ApJ* 900, 61).
+- **Spectroscopy & Atomic Data**: Trident (Hummels, Smith & Silvia 2017), CLOUDY (Ferland et al. 2017), Morton (2003), Verner et al. (1996).

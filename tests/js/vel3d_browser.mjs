@@ -11,7 +11,7 @@ import {join, resolve} from "node:path";
 import {launch, serve, BLOCK, parseArgs, sleep, ROOT} from "./lib/browser.mjs";
 
 if (!process.env.TNG_BROWSER) { console.log("skipped (set TNG_BROWSER=1 and pass --viz DIR to run the 3D velocity browser test)"); process.exit(0); }
-const {opt} = parseArgs(process.argv.slice(2)), VIZ = opt.viz && resolve(opt.viz), DOCS = resolve(opt.docs || join(ROOT, "docs/tng50")), SHOTS = opt.shots && resolve(opt.shots);
+const {opt} = parseArgs(process.argv.slice(2)), VIZ = opt.viz && resolve(opt.viz), DOCS = resolve(opt.docs || join(ROOT, "docs/ism")), SHOTS = opt.shots && resolve(opt.shots);
 if (!VIZ || !existsSync(join(VIZ, "manifest_v2.json"))) { console.error("--viz DIR with a manifest_v2.json is required"); process.exit(2); }
 const MAN = JSON.parse(readFileSync(join(VIZ, "manifest_v2.json"), "utf8"));
 if (!MAN.gas?.vectors?.v) { console.log("skipped (the manifest has no gas.vectors)"); process.exit(0); }
@@ -85,7 +85,7 @@ try {
       for (const s of slots) U[s].value = save[s]; U.uVelHave.value.copy(saveH[0]); U.uWHave.value.copy(saveH[1]);
       v.camera.position.copy(cam0); v.camera.quaternion.copy(q0); v.camera.updateMatrixWorld(); v.setStars({gasMix: gm0}); v.setTransfer({}); tmp.forEach(t => t.dispose()); v.render(); }
     return JSON.stringify(out); })()`));
-  { const {velRayMoment} = await import("../../docs/tng50/js/vizdata.js");
+  { const {velRayMoment} = await import("../../docs/ism/js/vizdata.js");
     const eV = velRayMoment("vlos", [{w: 1, v: qr.vDec, p: [0, 0, 0]}], qr.dir), e = qr.dir.map(() => 0); e[qr.ax] = qr.aDec;
     const eS = velRayMoment("sigmalos", [{w: 1, v: e, p: [0, 0, 0]}, {w: 1, v: e.map(x => -x), p: [0, 0, 0]}], qr.dir);
     const [lo, hi] = qr.win1, gotV = lo + (hi - lo) * qr.c1[0] / 255, gotS = 200 * qr.c2[0] / 255, stepV = (hi - lo) / 255;

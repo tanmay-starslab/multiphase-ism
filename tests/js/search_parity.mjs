@@ -1,4 +1,4 @@
-// JS/Python parity of the component search (design-2 §6.2): docs/tng50/js/search.js vs tngsight/search.py.
+// JS/Python parity of the component search (design-2 §6.2): docs/ism/js/search.js vs tngsight/search.py.
 // Usage: node tests/js/search_parity.mjs [reference.json]
 //   Reference lookup order: the argument, tests/search_golden.json, tests/data/search_golden.json, else
 //   `$PYTHON -m tngsight.search --reference <tmp>` (U_fit's CLI). With none available the test SKIPS (exit 0, says so).
@@ -9,7 +9,7 @@ import {execFileSync} from "node:child_process";
 import {tmpdir} from "node:os";
 import {join, dirname, isAbsolute} from "node:path";
 import {fileURLToPath} from "node:url";
-import {runQuery, rankAll, QUERY_SCHEMA} from "../../docs/tng50/js/search.js";
+import {runQuery, rankAll, QUERY_SCHEMA} from "../../docs/ism/js/search.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = join(HERE, "..", "..");
 let fails = 0; const check = (ok, msg) => { console.log(`${ok ? "ok  " : "FAIL"} ${msg}`); if (!ok) fails++; };

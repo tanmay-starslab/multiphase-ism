@@ -16,12 +16,12 @@ const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = resolve(HERE, "../.
 let fails = 0; const check = (ok, msg) => { console.log(`${ok ? "ok  " : "FAIL"} ${msg}`); if (!ok) fails++; };
 const tmp = mkdtempSync(join(tmpdir(), "rmparity-"));
 let refSrc = null;
-try { refSrc = execFileSync("git", ["-C", ROOT, "show", `${REF}:docs/tng50/js/raymarch.js`], {encoding: "utf8"}); }
+try { refSrc = execFileSync("git", ["-C", ROOT, "show", `${REF}:docs/ism/js/raymarch.js`], {encoding: "utf8"}); }
 catch (x) { console.log(`skipped: reference ${REF} not available (${x.message.split("\n")[0]})`); process.exit(0); }
 writeFileSync(join(tmp, "raymarch_ref.mjs"), refSrc);
 const ref = await import(pathToFileURL(join(tmp, "raymarch_ref.mjs")).href);
-const cur = await import(pathToFileURL(join(ROOT, "docs/tng50/js/raymarch.js")).href);
-const tube = await import(pathToFileURL(join(ROOT, "docs/tng50/learn/how-a-spectrum-is-made/js/stage/tube.js")).href);
+const cur = await import(pathToFileURL(join(ROOT, "docs/ism/js/raymarch.js")).href);
+const tube = await import(pathToFileURL(join(ROOT, "docs/ism/learn/how-a-spectrum-is-made/js/stage/tube.js")).href);
 
 check(cur.VERT === ref.VERT, "explorer VERT byte-identical to " + REF);
 check(cur.FRAG === ref.FRAG, `explorer FRAG byte-identical to ${REF} (${cur.FRAG.length} chars)`);
@@ -71,7 +71,7 @@ const a = frame(R), b = frame(C); let diff = 0, lit = 0; for (let i = 0; i < a.l
 window.__res = {diff, lit};
 </script>`;
   const srv = createServer((req, res) => { const u = req.url.split("?")[0];
-    const body = u === "/" ? page : u === "/ref.mjs" ? refSrc : u === "/cur.mjs" ? readFileSync(join(ROOT, "docs/tng50/js/raymarch.js"), "utf8") : null;
+    const body = u === "/" ? page : u === "/ref.mjs" ? refSrc : u === "/cur.mjs" ? readFileSync(join(ROOT, "docs/ism/js/raymarch.js"), "utf8") : null;
     if (body === null) { res.writeHead(404); res.end(); return; } res.writeHead(200, {"Content-Type": u === "/" ? "text/html" : "text/javascript"}); res.end(body); });
   await new Promise(r => srv.listen(0, "127.0.0.1", r));
   const P = await launch({width: 400, height: 400, edge: A.edge});

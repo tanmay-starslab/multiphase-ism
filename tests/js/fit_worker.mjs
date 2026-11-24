@@ -1,13 +1,13 @@
-// docs/tng50/js/fitworker.js driven through node worker_threads with a `self` shim (design-3 sections 5.5 and 8 U_fit 5):
+// docs/ism/js/fitworker.js driven through node worker_threads with a `self` shim (design-3 sections 5.5 and 8 U_fit 5):
 // results, LRU hits (< 1 ms, identical result), cancel of queued keys, clear, and errors as {type: "error"}.
 import {Worker} from "node:worker_threads";
 import {readFileSync} from "node:fs";
 import {join, dirname} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
-import {degradeV, decodeTNGS, cacheKey, seedFor} from "../../docs/tng50/js/fit.js";
+import {degradeV, decodeTNGS, cacheKey, seedFor} from "../../docs/ism/js/fit.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url)), FIX = join(HERE, "fixtures");
-const WORKER = pathToFileURL(join(HERE, "..", "..", "docs", "tng50", "js", "fitworker.js")).href;
+const WORKER = pathToFileURL(join(HERE, "..", "..", "docs", "ism", "js", "fitworker.js")).href;
 const fx = JSON.parse(readFileSync(join(FIX, "fit_cases.json"), "utf8"));
 const bins = {}; for (const id of fx.meta.ids) { const b = readFileSync(join(FIX, "fit_bins", `${id}.bin`)); bins[id] = decodeTNGS(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); }
 let fails = 0;

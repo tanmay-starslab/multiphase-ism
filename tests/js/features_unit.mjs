@@ -1,4 +1,4 @@
-// Page features (docs/tng50/js/features.js, UX round 4): the pure parts, no browser. createHistory (undo and redo of
+// Page features (docs/ism/js/features.js, UX round 4): the pure parts, no browser. createHistory (undo and redo of
 // instrument snapshots), keyAction (the page's key map and where it is ignored), pickRandom (never the current id when
 // there is a choice), csvCell, spectraCSV (plotted window only, sigma scalar or per pixel) and fitCSV (lower limits carry
 // logN_lower and no errors); plus the copy rules for the new controls (each has a data-tip of <= 12 words, no dot
@@ -6,7 +6,7 @@
 // Usage: node tests/js/features_unit.mjs
 import {readFileSync} from "node:fs";
 import {join} from "node:path";
-import {createHistory, keyAction, pickRandom, csvCell, spectraCSV, fitCSV} from "../../docs/tng50/js/features.js";
+import {createHistory, keyAction, pickRandom, csvCell, spectraCSV, fitCSV} from "../../docs/ism/js/features.js";
 import {ROOT, checker, sepHits} from "./lib/browser.mjs";
 import {jsStrings} from "./lib/jsscan.mjs";
 
@@ -58,7 +58,7 @@ check(csvCell(1.23456, 2) === "1.23" && csvCell(NaN, 2) === "" && csvCell(null) 
     && rows[2] === "C IV 1548,0,30000,20,40.0,,,,14.52,20.0,,sat", `csv fit: values, and a saturated component as a lower limit without errors (${rows[2]})`); }
 
 /* ---- copy rules of the module ---- */
-{ const src = readFileSync(join(ROOT, "docs/tng50/js/features.js"), "utf8"), strs = jsStrings(src);
+{ const src = readFileSync(join(ROOT, "docs/ism/js/features.js"), "utf8"), strs = jsStrings(src);
   const tips = [...src.matchAll(/btn\("[^"]*", "[^"]*", "[^"]*", "([^"]+)"/g), ...src.matchAll(/item\("[^"]*", "[^"]*", "([^"]+)"\)/g)].map(m => m[1]);
   const words = s => s.split(/\s+/).filter(w => /[\p{L}\p{N}]/u.test(w)).length;
   check(tips.length >= 7 && tips.every(t => words(t) <= 12), `copy: ${tips.length} new controls each with a tip of <= 12 words (${tips.map(words).join(" ")})`);

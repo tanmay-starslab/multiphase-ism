@@ -1,13 +1,13 @@
-// Transfer-function volume mode: the pure TF model in docs/tng50/js/tf.js (band list -> 256×64 RGBA texture, presets
+// Transfer-function volume mode: the pure TF model in docs/ism/js/tf.js (band list -> 256×64 RGBA texture, presets
 // incl. THOR Fig. 11 "Gas phases", URL encode/decode, histograms, gradient) and the TF part of the shader text and
 // uniforms in raymarch.js (sampler budget, uniforms off by default, the THOR compositing line). No Python, no browser.
 // (The float-exact identity of every non-TF mode against the previous shader was checked in a WebGL2 harness; this file
 // pins the text-level guarantees: TF code runs only under uTFOn with uMode 1 outside velocity views.)
 // Usage: node tests/js/tf_unit.mjs
 import {TF_W, TF_H, MAX_BANDS, PRESETS, PRESET_LABELS, THOR, NELSON16, NELSON16_WMIN, GMAX_DEFAULT, evalTF, buildTF, preset, encodeTF, decodeTF,
-  histogram, histogram2D, gradAt, gradMask, tfUniforms, defaultWRef, W_MIN, W_MAX, wPos, posW, fmtW} from "../../docs/tng50/js/tf.js";
-import {lut} from "../../docs/tng50/js/colormaps.js";
-import {FRAG, makeMaterial} from "../../docs/tng50/js/raymarch.js";
+  histogram, histogram2D, gradAt, gradMask, tfUniforms, defaultWRef, W_MIN, W_MAX, wPos, posW, fmtW} from "../../docs/ism/js/tf.js";
+import {lut} from "../../docs/ism/js/colormaps.js";
+import {FRAG, makeMaterial} from "../../docs/ism/js/raymarch.js";
 
 let fails = 0; const check = (ok, msg) => { console.log(`${ok ? "ok  " : "FAIL"} ${msg}`); if (!ok) fails++; };
 const near = (a, b, e = 1e-6) => Math.abs(a - b) <= e;

@@ -1,7 +1,7 @@
 """scripts/export_tng50_web.py (design-2 §7.6, §7.9; design-2b §6.4, §6.5): p0/p1 from the npz geom, components copy,
 has_components, custom ids only with --include-generated, page config keys, js copy, and the Phase-2b viz manifest:
 only manifest_v2.json is copied, CFG.viz shape, invalid/missing manifest -> viz null, --viz-local (refused for
-docs/tng50), vol/vol_url gone, --prune removes data/vol; Phase 3: CFG v3 from the ion registry, catalog v2
+docs/ism), vol/vol_url gone, --prune removes data/vol; Phase 3: CFG v3 from the ion registry, catalog v2
 passthrough, check_bin v1/v2, --allow-v1 and the mixed v1/v2 refusal. Output always into tmp."""
 from __future__ import annotations
 import gzip, hashlib, importlib.util, json, re, struct, sys
@@ -335,10 +335,10 @@ def test_viz_local_refused_for_docs(fake_lib, viz_dir, fake_vizpack, capsys):
 
 
 def test_repo_has_no_phase2_volumes():
-    """design-2b §6.4: docs/tng50/data/vol is gone and ignored; cube subdirs of data/viz are ignored."""
+    """design-2b §6.4: docs/ism/data/vol is gone and ignored; cube subdirs of data/viz are ignored."""
     assert not (ROOT / "docs" / "tng50" / "data" / "vol").exists()
     ign = (ROOT / ".gitignore").read_text().splitlines()
-    assert "docs/tng50/data/vol/" in ign and "docs/tng50/data/viz/*/" in ign
+    assert "docs/ism/data/vol/" in ign and "docs/ism/data/viz/*/" in ign
 
 
 @pytest.mark.skipif(not (LIB / "catalog.json").is_file(), reason="real library not present")
@@ -459,10 +459,10 @@ def test_galaxy_flags_refused(fake_lib, tmp_path, capsys):
         _run(fake_lib, tmp_path / "s2", "--galaxies-root", str(root), "--galaxies", "abc")
     with pytest.raises(SystemExit):
         _run(fake_lib, tmp_path / "s3", "--galaxies-root", str(root), "--galaxies", "all", "--gal-viz-base", "https://x/")
-    with pytest.raises(SystemExit):                                                          # packs never go into docs/tng50
+    with pytest.raises(SystemExit):                                                          # packs never go into docs/ism
         _run(fake_lib, tmp_path / "s4", "--galaxies-root", str(root), "--galaxies", "all",
              "--pack-out", str(ROOT / "docs" / "tng50" / "data" / "gal"))
-    assert "refused inside docs/tng50" in capsys.readouterr().err
+    assert "refused inside docs/ism" in capsys.readouterr().err
     assert not (ROOT / "docs" / "tng50" / "data" / "gal").exists()
 
 
@@ -512,7 +512,7 @@ def test_galaxy_hosting_index_and_failed_check(fake_lib, tmp_path, capsys):
 
 
 def test_no_google_fonts():
-    """The site self-hosts its fonts (docs/tng50/fonts, css/tokens.css): no page or template loads Google Fonts."""
+    """The site self-hosts its fonts (docs/ism/fonts, css/tokens.css): no page or template loads Google Fonts."""
     pages = [ROOT / "docs" / "_template.html", ROOT / "docs" / "index.html", ROOT / "docs" / "tng50" / "_template.html",
              ROOT / "docs" / "tng50" / "index.html", *(ROOT / "docs" / "tng50" / "learn").rglob("*.html"),
              *(ROOT / "docs" / "tng50" / "css").glob("*.css"), *(ROOT / "docs" / "tng50" / "learn").rglob("*.css")]

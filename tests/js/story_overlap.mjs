@@ -3,7 +3,7 @@
 //
 //   node tests/js/story_overlap.mjs                     self-test + node part
 //   node tests/js/story_overlap.mjs --fixture F.json    evaluate one recorded snapshot (or an array of them)
-//   TNG_BROWSER=1 node tests/js/story_overlap.mjs [docs/tng50] [--quick] [--samples 12] [--motion both|reduced|normal]
+//   TNG_BROWSER=1 node tests/js/story_overlap.mjs [docs/ism] [--quick] [--samples 12] [--motion both|reduced|normal]
 //        [--no-explorer] [--explorer-only] [--shots DIR] [--out DIR] [--edge BIN] [--max-states N]
 //   TNG_BROWSER=1 node tests/js/story_overlap.mjs --capture-sizes   write tests/js/fixtures/story_qa/sizes.json (v2 page)
 //
@@ -132,7 +132,7 @@ else {
 
 /* ---------------------------------------------------------------- browser part */
 if (!process.env.TNG_BROWSER) { C.note("browser part skipped (set TNG_BROWSER=1)"); process.exit(C.finish()); }
-const DIR = resolve(pos[0] || join(REPO, "docs/tng50"));
+const DIR = resolve(pos[0] || join(REPO, "docs/ism"));
 const PAGE = join(DIR, STORY_REL, "index.html");
 if (!existsSync(PAGE)) { skipOrFail(`no story page at ${relative(REPO, PAGE)}`); process.exit(C.finish()); }
 const quick = !!opt.quick, SAMPLES = +(opt.samples || (quick ? 4 : 12)), SHOTS = opt.shots ? resolve(opt.shots) : null, OUT = opt.out ? resolve(opt.out) : null;

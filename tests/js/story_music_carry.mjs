@@ -5,7 +5,7 @@ import {launch, sleep} from "./lib/browser.mjs";
 import {STORY_REL, gzServe, REPO, plainEdge} from "./lib/storyqa.mjs";
 if (!process.env.TNG_BROWSER) { console.log("skipped (set TNG_BROWSER=1 to run the music carry-over test)"); process.exit(0); }
 import {join, resolve} from "node:path";
-const srv = await gzServe(resolve(join(REPO, "docs/tng50")));
+const srv = await gzServe(resolve(join(REPO, "docs/ism")));
 const P = await launch({edge: plainEdge(), reducedMotion: true, width: 1440, height: 900});
 const M = "window.__story && __story.music";
 const st = () => P.eval(`JSON.stringify({state: __story.music.debug().state, on: __story.music.on(), sw: document.querySelector('[data-testid=gate-music]').getAttribute('aria-checked'), wait: document.querySelector('[data-testid=gate-music]').dataset.wait || null})`);

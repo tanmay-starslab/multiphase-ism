@@ -686,15 +686,24 @@ EMPTY_LOG = -99.0          # stats percentiles of a cube with no positive voxel 
 
 def cube_stats(values, q) -> dict:
     v = np.asarray(values, dtype=np.float64)
-    ok = np.asarray(q) > 0
-    # percentiles over the voxels with a positive value: a voxel with gas but zero ion density gave log10(0) = -inf
-    # and NaN percentiles, and a cube with no positive voxel is legitimate (gas-poor halo: no Mg II in the whole L2
-    # box of 447914, run3), so it gets the finite EMPTY_LOG sentinel
+    q_arr = np.asarray(q)
+    ok = q_arr > 0
     pos = ok & np.isfinite(v) & (v > 0)
-    lv = np.log10(v[pos]) if pos.any() else np.array([EMPTY_LOG])
+    if pos.any():
+        vmax_log = float(np.log10(np.max(v[pos])))
+        # Subsample by 2x per axis if large (>1M elements) for 8x faster percentile estimation
+        v_sub = v[::2, ::2, ::2] if v.ndim == 3 and v.size > 1_000_000 else v
+        p_sub = pos[::2, ::2, ::2] if v.ndim == 3 and v.size > 1_000_000 else pos
+        lv = np.log10(v_sub[p_sub]) if p_sub.any() else np.array([vmax_log])
+        p01, p50, p99 = (float(x) for x in np.percentile(lv, [1, 50, 99]))
+        p99 = min(p99, vmax_log)
+        p50 = min(p50, p99)
+        p01 = min(p01, p50)
+    else:
+        p01 = p50 = p99 = vmax_log = EMPTY_LOG
     return {"frac_empty": round(float(1.0 - ok.mean()), 6),
-            "p01": round(float(np.percentile(lv, 1)), 4), "p50": round(float(np.percentile(lv, 50)), 4),
-            "p99": round(float(np.percentile(lv, 99)), 4), "max": round(float(np.max(lv)), 4)}
+            "p01": round(p01, 4), "p50": round(p50, 4),
+            "p99": round(p99, 4), "max": round(vmax_log, 4)}
 
 
 def vel_V(cubes_by_level: dict) -> float:

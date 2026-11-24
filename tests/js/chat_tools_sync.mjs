@@ -1,4 +1,4 @@
-// The registry-derived chat artefacts must agree (design.md §4.3): docs/tng50/js/chat.js TOOLS deep-equals
+// The registry-derived chat artefacts must agree (design.md §4.3): docs/ism/js/chat.js TOOLS deep-equals
 // server/chat_tools.json, chat.js SYSTEM_PROMPT equals the trimmed text of server/chat_system_prompt.txt (what
 // server/chat.py sends), and the search query schema deep-equals tngsight.search.QUERY_SCHEMA
 // (tests/js/fixtures/query_schema.json, from `python -m tngsight.search --schema`) and search.js QUERY_SCHEMA.
@@ -11,7 +11,7 @@ import {join, dirname} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = join(HERE, "..", "..");
-const C = await import(pathToFileURL(join(ROOT, "docs", "tng50", "js", "chat.js")).href);
+const C = await import(pathToFileURL(join(ROOT, "docs", "ism", "js", "chat.js")).href);
 let fails = 0;
 const check = (ok, msg) => { console.log(`${ok ? "ok  " : "FAIL"} ${msg}`); if (!ok) fails++; };
 const deq = (a, b) => { try { deepStrictEqual(a, b); return true; } catch { return false; } };
@@ -31,17 +31,17 @@ check(deq(q.properties.ion.enum, ions), "search_sightlines ion enum == registry 
 check(deq(C.TOOLS.map(t => t.name), ["set_instrument", "select_sightline", "search_sightlines", "request_sightline", "request_custom_ray",
   "show_3d", "get_page_state", "list_galaxies", "select_galaxy", "set_view"]), "the ten tools, in order");
 { // the sample sizes the prompt states (make_chat_tools N_GALAXIES, N_SBI) match the page's galaxy list
-  const page = join(ROOT, "docs", "tng50", "index.html");
+  const page = join(ROOT, "docs", "ism", "index.html");
   const m = existsSync(page) ? readFileSync(page, "utf8").match(/"galaxies":(\{"default".*?\]\})/) : null;
   if (m) { const G = JSON.parse(m[1]), sbi = G.list.filter(e => String(e.src || "").startsWith("sbi")).length;
     check(prompt.includes(`${G.list.length} simulated`) && prompt.includes(`${sbi} THOR galaxies`) && prompt.includes(`subhalo ${G.default}`),
       `prompt states the page's sample: ${G.list.length} galaxies, ${sbi} THOR, default ${G.default}`); }
-  else console.log("skip sample size vs docs/tng50/index.html (no galaxies list)");
+  else console.log("skip sample size vs docs/ism/index.html (no galaxies list)");
 }
 const fx = join(HERE, "fixtures", "query_schema.json");
 if (existsSync(fx)) check(deq(q, JSON.parse(readFileSync(fx, "utf8"))), "search_sightlines.query deep-equals tngsight.search.QUERY_SCHEMA");
 else console.log("skip query schema vs tngsight.search (tests/js/fixtures/query_schema.json absent)");
-const js = join(ROOT, "docs", "tng50", "js", "search.js");
+const js = join(ROOT, "docs", "ism", "js", "search.js");
 if (existsSync(js)) {
   const S = await import(pathToFileURL(js).href);
   check(deq(q, S.QUERY_SCHEMA), "search_sightlines.query deep-equals search.js QUERY_SCHEMA");

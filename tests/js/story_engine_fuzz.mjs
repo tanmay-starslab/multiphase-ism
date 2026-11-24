@@ -29,7 +29,7 @@ import {execFileSync} from "node:child_process";
 import {fileURLToPath, pathToFileURL} from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)), REPO = path.resolve(HERE, "../..");
-const ROOT = path.join(REPO, "docs/tng50/learn/how-a-spectrum-is-made");
+const ROOT = path.join(REPO, "docs/ism/learn/how-a-spectrum-is-made");
 const D = await import(pathToFileURL(path.join(REPO, "scripts/story_director.mjs")).href);
 const R = await import(pathToFileURL(path.join(REPO, "scripts/director/repair.mjs")).href);
 const EN = await import(pathToFileURL(path.join(ROOT, "js/engine.js")).href);

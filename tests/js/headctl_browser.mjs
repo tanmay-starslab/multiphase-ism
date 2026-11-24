@@ -1,6 +1,6 @@
 // Hands-free control (head steers, hand gestures act) in a headless Chromium with a fake camera that shows a face (tests/js/fixtures/face_portrait.jpg, the 2012
 // official White House portrait, public domain as a US government work, cropped; MediaPipe's own test image).
-// Usage: TNG_BROWSER=1 node tests/js/headctl_browser.mjs [docs/tng50] [--viz DIR] [--edge BIN] [--shots DIR]
+// Usage: TNG_BROWSER=1 node tests/js/headctl_browser.mjs [docs/ism] [--viz DIR] [--edge BIN] [--shots DIR]
 // It builds a short y4m from the fixture with ffmpeg ($FFMPEG, else ffmpeg on PATH, else ~/.conda/envs/cgm/bin/ffmpeg;
 // skipped when none is found), starts Chrome with --use-fake-device-for-media-stream --use-fake-ui-for-media-stream
 // --use-file-for-fake-video-capture, opens the 3D tab and checks:
@@ -23,7 +23,7 @@ if (!process.env.TNG_BROWSER) { console.log("skipped (set TNG_BROWSER=1 to run t
 const {pos, opt} = parseArgs(process.argv.slice(2));
 const FF = [process.env.FFMPEG, "ffmpeg", join(homedir(), ".conda/envs/cgm/bin/ffmpeg")].filter(Boolean).find(f => { try { execFileSync(f, ["-version"], {stdio: "ignore"}); return true; } catch { return false; } });
 if (!FF) { console.log("skipped (no ffmpeg to build the fake camera video; set FFMPEG)"); process.exit(0); }
-const DIR = resolve(pos[0] || join(ROOT, "docs/tng50")), PAGE = pickPage(DIR, opt.page), SHOTS = opt.shots && resolve(opt.shots);
+const DIR = resolve(pos[0] || join(ROOT, "docs/ism")), PAGE = pickPage(DIR, opt.page), SHOTS = opt.shots && resolve(opt.shots);
 const work = join(tmpdir(), `headctl-${process.pid}`); mkdirSync(work, {recursive: true});
 const Y4M = join(work, "face.y4m");
 // 4 s of the portrait at 15 fps, panning sideways so the head moves in the frame

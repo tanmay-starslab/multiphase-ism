@@ -35,3 +35,8 @@ dist/
 .wrangler/
 logs/
 build_L012/
+build_5lvl/
+docs/ism/data/viz/gas/
+docs/ism/data/viz/stars/
+docs/ism/data/gal/*/viz/gas/
+docs/ism/data/gal/*/viz/stars/

@@ -1,9 +1,9 @@
-// One-line help (docs/tng50/js/tips.js): the pure parts, no browser. placeTip (above when there is room, flip below,
+// One-line help (docs/ism/js/tips.js): the pure parts, no browser. placeTip (above when there is room, flip below,
 // clamp into the viewport, max width respected by the caller), createLongPress (fires after the delay with the finger
 // still, a tap or a drag does not, the click after a long press is to be swallowed), tipFor (control, its label, its
 // row) and the shared ion copy (<= 12 words, no dot separators).
 // Usage: node tests/js/tips_unit.mjs
-import {placeTip, createLongPress, tipFor, popupOpen, ION_TIPS, PRESS_MS, SHOW_MS, TOUCH_MS, GAP, MARGIN} from "../../docs/tng50/js/tips.js";
+import {placeTip, createLongPress, tipFor, popupOpen, ION_TIPS, PRESS_MS, SHOW_MS, TOUCH_MS, GAP, MARGIN} from "../../docs/ism/js/tips.js";
 import {checker, sepHits} from "./lib/browser.mjs";
 
 const C = checker(), check = C.check;

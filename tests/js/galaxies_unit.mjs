@@ -1,9 +1,9 @@
-// Unit tests of the galaxy picker's pure part (docs/tng50/js/galaxies.js; galaxy-sample spec, web contract): the index
+// Unit tests of the galaxy picker's pure part (docs/ism/js/galaxies.js; galaxy-sample spec, web contract): the index
 // from CFG.galaxies, the URL state g=<id>, where a galaxy's pack lives (the default galaxy keeps the legacy data/ paths),
 // sort with missing values last, search terms and cuts, and the number formats. Usage: node tests/js/galaxies_unit.mjs
 import assert from "node:assert/strict";
 import {galaxyIndex, parseGalaxy, resolveGalaxy, galaxyHashPart, packFor, sortGalaxies, matchGalaxy, filterGalaxies, lg, fmtSfr, galaxyTip, galaxyAria, galaxyCard,
-  unlistedGalaxy, nearestSightline, defaultSightline, srcOf, packBase, normId, isFire} from "../../docs/tng50/js/galaxies.js";
+  unlistedGalaxy, nearestSightline, defaultSightline, srcOf, packBase, normId, isFire} from "../../docs/ism/js/galaxies.js";
 
 let n = 0;
 const ok = (name, f) => { f(); n++; console.log("ok " + name); };

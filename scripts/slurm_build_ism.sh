@@ -1,27 +1,43 @@
 #!/bin/bash
-#SBATCH --job-name=ism_viz_build
-#SBATCH --partition=htc
+#SBATCH --job-name=ism-6regimes
+#SBATCH --partition=htc,public
 #SBATCH --qos=public
+#SBATCH --array=0-5
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=48G
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
 #SBATCH --time=01:30:00
-#SBATCH --output=/scratch/tsingh65/ism-absorber-explorer/logs/ism_build_%j.out
-#SBATCH --error=/scratch/tsingh65/ism-absorber-explorer/logs/ism_build_%j.err
+#SBATCH --output=/scratch/tsingh65/ism-absorber-explorer/slurm_ism_build_%A_%a.log
 
 set -euo pipefail
 cd /scratch/tsingh65/ism-absorber-explorer
-mkdir -p logs build_L012/rtml_50pc build_L012/ism_1kpc
 
-PY="/scratch/tsingh65/envs/gal3d/bin/python"
-if [ ! -x "$PY" ]; then
-  PY="python3"
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+
+PYTHON="/scratch/tsingh65/envs/gal3d/bin/python"
+if [ ! -x "$PYTHON" ]; then
+  PYTHON="python3"
 fi
 
-echo "[$(date -Is)] Starting 3-level (L0,L1,L2) 256^3 ISM & Radiative Turbulent Mixing Layer deep-zoom build..."
-"$PY" -m tngsight.ingest --preset mixing_layer --out build_L012/rtml_50pc --half-pc 25 --levels L0,L1,L2 --n 256 --nrays 120 --workers 16
-"$PY" -m tngsight.vizpack validate build_L012/rtml_50pc/viz
-"$PY" -m tngsight.ingest --preset ism_kpc --out build_L012/ism_1kpc --half-pc 500 --levels L0,L1,L2 --n 256 --nrays 120 --workers 16
-"$PY" -m tngsight.vizpack validate build_L012/ism_1kpc/viz
-echo "[$(date -Is)] Completed and validated 3-level L0,L1,L2 deep-zoom cubes!"
+VOLUMES=("RTML_50pc" "CloudCrush_200pc" "GMC_STARFORGE_20pc" "Superbubble_500pc" "ShatteringMist_10pc" "ISM_1kpc")
+IDX="${SLURM_ARRAY_TASK_ID:-0}"
+VOL="${VOLUMES[$IDX]}"
+
+echo "=================================================================="
+echo "[SLURM] Node: $(hostname) | CPUs: ${SLURM_CPUS_PER_TASK:-16} | Task: ${IDX} (${VOL}) | Start: $(date)"
+echo "=================================================================="
+
+"$PYTHON" scripts/build_ism_showcase.py \
+  --only "$VOL" \
+  --levels L0,L1,L2,L3,L4 \
+  --n 256 \
+  --nrays 120 \
+  --workers "${SLURM_CPUS_PER_TASK:-16}" \
+  --out-root /scratch/tsingh65/ism-absorber-explorer/build_5lvl
+
+echo "=================================================================="
+echo "[SLURM] Finished ${VOL} at $(date)"
+echo "=================================================================="

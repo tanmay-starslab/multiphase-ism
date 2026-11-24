@@ -1,6 +1,6 @@
 // Smoke test of the Phase-3 TNG50 page (design 6.6): it drives the page through window.tngApp v3 and the data-testid /
 // data-* hooks in headless Edge, and never matches copy text.
-// Usage: TNG_BROWSER=1 node tests/js/page_smoke.mjs <exported docs/tng50 dir> [backend URL | --api-uds SOCKET]
+// Usage: TNG_BROWSER=1 node tests/js/page_smoke.mjs <exported docs/ism dir> [backend URL | --api-uds SOCKET]
 //            [--page FILE] [--viz DIR] [--port N] [--profile DIR] [--inject shim.js] [--edge BIN] [--shots DIR] [--strict-timing]
 //   The page is <dir>/index.html when it is a Phase-3 export, else <dir>/_template.html (or --page FILE); the rest of
 //   <dir> (data/, js/, css/) is served beside it on 127.0.0.1:<port> (default: OS-chosen). Requests to the owner's
@@ -22,7 +22,7 @@ import {ROOT, parseArgs, checker, loadRegistry, serve, launch, READY, UI_LIB, BL
 const {pos, opt} = parseArgs(process.argv.slice(2));
 const [dirArg, apiArg] = pos;
 let api = apiArg;     // --api-uds SOCKET: the backend is a server on a unix socket, proxied under this test's own port and origin
-if (!dirArg) { console.error("usage: page_smoke.mjs <docs/tng50 dir> [backend URL | --api-uds SOCKET] [--page FILE] [--port N] [--viz DIR] [--inject shim.js]"); process.exit(2); }
+if (!dirArg) { console.error("usage: page_smoke.mjs <docs/ism dir> [backend URL | --api-uds SOCKET] [--page FILE] [--port N] [--viz DIR] [--inject shim.js]"); process.exit(2); }
 const DIR = resolve(dirArg), PAGE = pickPage(DIR, opt.page || process.env.TNG_SMOKE_FILE);
 if (!existsSync(PAGE)) { console.error("no page file " + PAGE); process.exit(2); }
 const C = checker(), check = C.check, note = C.note;

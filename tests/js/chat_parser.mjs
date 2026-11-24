@@ -1,10 +1,10 @@
-// Local-model JSON tool-call protocol of docs/tng50/js/chat.js: extraction, parsing, schema-subset validation and the
+// Local-model JSON tool-call protocol of docs/ism/js/chat.js: extraction, parsing, schema-subset validation and the
 // repair prompt, against adversarial model replies. Usage: node tests/js/chat_parser.mjs
 import {join, dirname} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = join(HERE, "..", "..");
-const C = await import(pathToFileURL(join(ROOT, "docs", "tng50", "js", "chat.js")).href);
+const C = await import(pathToFileURL(join(ROOT, "docs", "ism", "js", "chat.js")).href);
 let fails = 0, n = 0;
 const check = (ok, msg) => { n++; console.log(`${ok ? "ok  " : "FAIL"} ${msg}`); if (!ok) fails++; };
 const okTool = (text, tool, args, msg) => { const p = C.parseReply(text);

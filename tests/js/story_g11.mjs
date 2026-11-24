@@ -2,7 +2,7 @@
 //
 //   node tests/js/story_g11.mjs                           self-test on synthetic frames (PNG encode -> decode -> gate)
 //   node tests/js/story_g11.mjs --png F.png [--bg B.png] [--band x,y,w,h] [--exempt]   judge one frame
-//   TNG_BROWSER=1 node tests/js/story_g11.mjs [docs/tng50] [--shots DIR] [--out DIR] [--viewports 1440x900,390x844]
+//   TNG_BROWSER=1 node tests/js/story_g11.mjs [docs/ism] [--shots DIR] [--out DIR] [--viewports 1440x900,390x844]
 //        [--luma rel|srgb] [--edge BIN]
 //
 // G11 (frozen in notes/story2/S0.md §4 as `G11_dark_frac: 0.55`, `G11_dark_lum: 0.12`, `G11_band_p95: 0.35`): at the
@@ -27,7 +27,7 @@
 //   TF: deriveTFBlock(story, galaxyVolWindow, {camDist, tube, step}) is the meta.tf the director writes (R3 imports it);
 //      js/stage/tfstory.js applyStoryTF applies it. Calibration on the hero: see TF_HERO below.
 //   node tests/js/story_g11.mjs --tf [--out DIR]          print (and write tf_<id>.json) the derived block per v3 story
-//   TNG_BROWSER=1 node tests/js/story_g11.mjs --g14 --story id[,id] [docs/tng50] [--viz DIR] [--shots DIR] [--out DIR]
+//   TNG_BROWSER=1 node tests/js/story_g11.mjs --g14 --story id[,id] [docs/ism] [--viz DIR] [--shots DIR] [--out DIR]
 //        G14 frames of ?story=<id> (R7, GPU node: TNG_GPU=1); --mode empty measures B1/B2 full frames for any story. TF repair steps are written into beats.<id>.json by the
 //        director (deriveTFBlock step 1/2), never by this test.
 //   Imported by the director for deriveTFBlock / evalG14: the checks below run only when this file is the entry point.
@@ -129,7 +129,7 @@ export function deriveTFBlock(story, gw, {camDist = TF_HERO.camDist, tube = null
   return out;
 }
 
-const ROOT_DIR = join(REPO, "docs/tng50", STORY_REL);
+const ROOT_DIR = join(REPO, "docs/ism", STORY_REL);
 const v3Stories = () => { const d = join(ROOT_DIR, "data/v3"); return existsSync(d) ? readdirSync(d).filter(f => /^story_\d+_.+\.json$/.test(f)).sort()
   .map(f => ({file: f, story: JSON.parse(readFileSync(join(d, f), "utf8"))})) : []; };
 const STORY_ID = {clean_single: "clean", multiphase: "multiphase", damped: "damped", empty: "empty", hot_only: "hot"};
@@ -253,7 +253,7 @@ const PROJ = `async (p, ray, encs) => {
   return {beat: fs.beat.id, l: fs.l, enc: e.letter, box: x1 > x0 && y1 > y0 ? {x: x0, y: y0, w: x1 - x0, h: y1 - y0} : null, approx: !S.view};
 }`;
 async function g14Browser(C, pos, opt) {
-  const DIR = resolve(pos[0] || join(REPO, "docs/tng50")), ids = String(opt.story || "").split(",").filter(Boolean);
+  const DIR = resolve(pos[0] || join(REPO, "docs/ism")), ids = String(opt.story || "").split(",").filter(Boolean);
   if (!C.check(ids.length > 0, "--g14 needs --story id[,id]")) return;
   const SHOTS = opt.shots ? resolve(opt.shots) : null, OUT = opt.out ? resolve(opt.out) : null;
   if (SHOTS) mkdirSync(SHOTS, {recursive: true}); if (OUT) mkdirSync(OUT, {recursive: true});
@@ -350,7 +350,7 @@ await tierASelfTest(C);
 if (!process.env.TNG_BROWSER) { C.note("browser part skipped (set TNG_BROWSER=1; GPU node for the real volume)"); process.exit(C.finish()); }
 
 /* ---------------------------------------------------------------- frames of the live page */
-const DIR = resolve(pos[0] || join(REPO, "docs/tng50")), PAGE = join(DIR, STORY_REL, "index.html");
+const DIR = resolve(pos[0] || join(REPO, "docs/ism")), PAGE = join(DIR, STORY_REL, "index.html");
 if (!existsSync(PAGE)) { C.check(process.env.STORY_REQUIRE !== "1", `no story page at ${relative(REPO, PAGE)}`); process.exit(C.finish()); }
 const SHOTS = opt.shots ? resolve(opt.shots) : null, OUT = opt.out ? resolve(opt.out) : null;
 if (SHOTS) mkdirSync(SHOTS, {recursive: true}); if (OUT) mkdirSync(OUT, {recursive: true});

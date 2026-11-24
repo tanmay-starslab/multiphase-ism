@@ -1,12 +1,12 @@
-// Turn loops of docs/tng50/js/chat.js with scripted fake backends and a fake window.tngApp bridge (no DOM, no network):
+// Turn loops of docs/ism/js/chat.js with scripted fake backends and a fake window.tngApp bridge (no DOM, no network):
 // tool order, the 6-call cap, one repair retry, parallel tool_use -> ONE tool_result message, verbatim assistant
 // content, grounding badge, refusal / max_tokens handling, tool execution results. Usage: node tests/js/chat_loop.mjs
 import {join, dirname} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = join(HERE, "..", "..");
-const C = await import(pathToFileURL(join(ROOT, "docs", "tng50", "js", "chat.js")).href);
-const searchUrl = pathToFileURL(join(ROOT, "docs", "tng50", "js", "search.js")).href;
+const C = await import(pathToFileURL(join(ROOT, "docs", "ism", "js", "chat.js")).href);
+const searchUrl = pathToFileURL(join(ROOT, "docs", "ism", "js", "search.js")).href;
 let fails = 0, n = 0;
 const check = (ok, msg) => { n++; console.log(`${ok ? "ok  " : "FAIL"} ${msg}`); if (!ok) fails++; };
 const J = JSON.stringify;
@@ -277,7 +277,7 @@ function galaxyApp() {
   };
   return app;
 }
-const {galaxySummary: C_galaxySummary} = await import(pathToFileURL(join(ROOT, "docs", "tng50", "js", "galaxies.js")).href);
+const {galaxySummary: C_galaxySummary} = await import(pathToFileURL(join(ROOT, "docs", "ism", "js", "galaxies.js")).href);
 {
   const app = galaxyApp(), ex = C.createToolExecutor(app, {loadSearch: () => import(searchUrl)});
   let r = await ex("get_page_state", {});
@@ -418,9 +418,9 @@ check(C.WEBLLM_URL === "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.85/lib/
   let seenUrl = null;
   await C.createLocalGenerate(() => {}, async (u, sri) => { seenUrl = [u, sri]; throw new Error("stop"); }).catch(() => {});
   check(seenUrl && seenUrl[0] === C.WEBLLM_URL && seenUrl[1] === C.WEBLLM_SRI, "createLocalGenerate loads WebLLM only through the verified importer");
-  const worker = (await import("node:fs")).readFileSync(new URL("../../docs/tng50/js/chat_worker.js", import.meta.url), "utf8");
+  const worker = (await import("node:fs")).readFileSync(new URL("../../docs/ism/js/chat_worker.js", import.meta.url), "utf8");
   check(/importVerified\(WEBLLM_URL, WEBLLM_SRI\)/.test(worker) && !/cdn\.jsdelivr|\+esm/.test(worker), "worker imports WebLLM through importVerified, no raw CDN import");
-  const src = (await import("node:fs")).readFileSync(new URL("../../docs/tng50/js/chat.js", import.meta.url), "utf8");
+  const src = (await import("node:fs")).readFileSync(new URL("../../docs/ism/js/chat.js", import.meta.url), "utf8");
   check(!/CreateMLCEngine\(/.test(src.replace(/CreateWebWorkerMLCEngine/g, "")), "no main-thread CreateMLCEngine fallback");
 }
 { // consent wording by origin (security-5)

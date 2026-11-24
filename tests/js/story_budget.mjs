@@ -2,9 +2,9 @@
 // Rewrite of the v1 (card-era) budget test: the 75 kB story-JS cap, "no three.js", the 80 kB data cap, the 4G first
 // paint and the 1.5 MB Step run are gone (v2 loads three and volume cubes by design); the checks below are the G6 row.
 //
-//   node tests/js/story_budget.mjs [docs/tng50]          self-test (budget_*.json) + node part
+//   node tests/js/story_budget.mjs [docs/ism]          self-test (budget_*.json) + node part
 //   node tests/js/story_budget.mjs --fixture F.json       evaluate one recorded set of numbers
-//   TNG_BROWSER=1 node tests/js/story_budget.mjs [docs/tng50] [--out DIR] [--edge BIN] [--viz DIR] [--allow-origin a,b]
+//   TNG_BROWSER=1 node tests/js/story_budget.mjs [docs/ism] [--out DIR] [--edge BIN] [--viz DIR] [--allow-origin a,b]
 //   [TNG_BROWSER=1] node tests/js/story_budget.mjs <tree> --story <id|full> [--out DIR] [--base-ref 8557cac]
 //        Tier A per-story budget (DESIGN_tierA §9, G6s; R7_gpu): the tree's data/index.json must be story-index/2 (the
 //        tests/js/lib/storyqa.mjs runner builds it). Node part: page shell growth over the base ref (allowance 3 kB gz,
@@ -43,7 +43,7 @@ const C = checker(), KB = 1024, MB = KB * KB, kb = n => (n / KB).toFixed(1) + " 
 if (opt.fixture) { const fx = JSON.parse(readFileSync(resolve(opt.fixture), "utf8")); if (report(C, evalBudget(fx))) C.check(true, `${fx.name || "budget"}: G6 passes`); process.exit(C.finish()); }
 selfTest(C, "budget", fx => evalBudget(fx));
 
-const DIR = resolve(pos[0] || join(REPO, "docs/tng50")), ROOT = join(DIR, STORY_REL), PAGE = join(ROOT, "index.html"), OUT = opt.out ? resolve(opt.out) : null;
+const DIR = resolve(pos[0] || join(REPO, "docs/ism")), ROOT = join(DIR, STORY_REL), PAGE = join(ROOT, "index.html"), OUT = opt.out ? resolve(opt.out) : null;
 if (!existsSync(PAGE)) { C.check(process.env.STORY_REQUIRE !== "1", `no story page at ${relative(REPO, PAGE)}`); process.exit(C.finish()); }
 if (OUT) mkdirSync(OUT, {recursive: true});
 
@@ -85,7 +85,7 @@ if (TIER) {
   const CASE_ONLY = new Set(["js/stage/tfcase.js"].map(p => join(ROOT, p)));
   let base = 0, nb = 0, heroGz = 0;
   for (const [f, n] of sizes) { if (CASE_ONLY.has(f)) continue; heroGz += n; const rel = relative(DIR, f); let buf = null;
-    try { buf = execFileSync("git", ["-C", REPO, "show", `${BASE}:docs/tng50/${rel}`], {maxBuffer: 64 << 20, stdio: ["ignore", "pipe", "ignore"]}); } catch { nb++; }
+    try { buf = execFileSync("git", ["-C", REPO, "show", `${BASE}:docs/ism/${rel}`], {maxBuffer: 64 << 20, stdio: ["ignore", "pipe", "ignore"]}); } catch { nb++; }
     if (buf) base += gzipSync(buf, {level: 9}).length; }
   nodeNums.shellGrowth = heroGz - base; nodeNums.baseRef = BASE; nodeNums.shellBase = base; nodeNums.caseOnlyGz = shellGz - heroGz;
   C.check(heroGz - base <= 3 * KB, `G6 shell growth: hero page shell ${kb(heroGz)} gz vs ${kb(base)} at ${BASE} (+${kb(heroGz - base)} <= 3 kB; ${nb} file(s) new since ${BASE}; case-only modules ${kb(shellGz - heroGz)} not counted)`);

@@ -1,10 +1,10 @@
-// Parity of docs/tng50/js/fit.js fitPanel with the Python reference fitter (tests/js/make_fit_fixture.py), and the
+// Parity of docs/ism/js/fit.js fitPanel with the Python reference fitter (tests/js/make_fit_fixture.py), and the
 // column parity of the on-the-fly fits with the intrinsic tngsight.vpfit catalogue (design-3 sections 5.6 and 8).
 // Usage: node tests/js/fit_parity.mjs [fit_cases.json]   (default: the committed tests/js/fixtures/fit_cases.json)
 import {readFileSync} from "node:fs";
 import {join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
-import {fitPanel, decodeTNGS, arange, degradeV, seedFor} from "../../docs/tng50/js/fit.js";
+import {fitPanel, decodeTNGS, arange, degradeV, seedFor} from "../../docs/ism/js/fit.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url)), FIX = join(HERE, "fixtures");
 const fx = JSON.parse(readFileSync(process.argv[2] || join(FIX, "fit_cases.json"), "utf8"));

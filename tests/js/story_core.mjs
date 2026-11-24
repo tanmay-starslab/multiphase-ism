@@ -26,7 +26,7 @@ import path from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)), REPO = path.resolve(HERE, "../..");
-const ROOT = path.join(REPO, "docs/tng50/learn/how-a-spectrum-is-made");
+const ROOT = path.join(REPO, "docs/ism/learn/how-a-spectrum-is-made");
 const imp = p => import(pathToFileURL(path.join(ROOT, p)).href);
 const J = p => JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8"));
 const exists = p => fs.existsSync(path.join(ROOT, p));

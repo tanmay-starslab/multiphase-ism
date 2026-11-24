@@ -8,7 +8,7 @@
 //                                                         The note is appended to manifest.json notes[] with the git HEAD.
 //   node tests/js/story_hero_identity.mjs --self-test     seeded defects (one per part, in a temp copy of the page) must each
 //                                                         fail H0, and the untouched copy must pass
-//   options: --root DIR (a story ROOT to check; default docs/tng50/learn/how-a-spectrum-is-made), --no-dom, --json FILE
+//   options: --root DIR (a story ROOT to check; default docs/ism/learn/how-a-spectrum-is-made), --no-dom, --json FILE
 //   env: H0_NO_DOM=1 skips the browser part (reported as PARTIAL, never as a pass of H0); TNG_EDGE as tests/js/lib/browser.mjs
 //
 // Parts (each one sha256 over a canonical JSON; on a mismatch the first differences are printed):
@@ -42,7 +42,7 @@ import {gzipSync, gunzipSync} from "node:zlib";
 import {tmpdir} from "node:os";
 
 const HERE = dirname(fileURLToPath(import.meta.url)), REPO = resolve(HERE, "../..");
-const DEFAULT_ROOT = join(REPO, "docs/tng50/learn/how-a-spectrum-is-made");
+const DEFAULT_ROOT = join(REPO, "docs/ism/learn/how-a-spectrum-is-made");
 const FIX = join(REPO, "tests/fixtures/hero_v2");
 const STORY_REL = "learn/how-a-spectrum-is-made";
 const HERO = {galaxy: 488530, ray: "rand_b062_a062", data: "data/story_488530_rand_b062_a062.json"};
@@ -302,7 +302,7 @@ function writeFixtures(snap, note) {
   }
   const old = readFix("manifest.json") || {notes: []};
   const head = spawnSync("git", ["rev-parse", "--short", "HEAD"], {cwd: REPO, encoding: "utf8"}).stdout.trim();
-  const dirty = spawnSync("git", ["status", "--porcelain", "--", "docs/tng50/learn/how-a-spectrum-is-made", "scripts/story_vtt.mjs"], {cwd: REPO, encoding: "utf8"}).stdout.trim();
+  const dirty = spawnSync("git", ["status", "--porcelain", "--", "docs/ism/learn/how-a-spectrum-is-made", "scripts/story_vtt.mjs"], {cwd: REPO, encoding: "utf8"}).stdout.trim();
   const dg = digest(snap);
   const prevDom = old.parts && old.parts.dom;
   const m = {schema: "hero-identity/1", base_commit: BASE_COMMIT, hero: HERO, node: process.version,
@@ -382,8 +382,8 @@ const DEFECTS = [
    apply: r => patchJson(join(r, "data/index.json"), ix => { ix.stories.push({galaxy: 424288, ray: "edge_b033_a270_s13959", story: "story_424288_edge_b033_a270_s13959.json", page_fits: "page_fits_424288_edge_b033_a270_s13959.json", label: "Subhalo 424288", eligible: true}); })},
 ];
 function mirror(T) {
-  // T/docs/tng50/<everything symlinked> except learn/how-a-spectrum-is-made, which is a real copy (patched per defect)
-  const docs = join(REPO, "docs/tng50"), md = join(T, "docs/tng50");
+  // T/docs/ism/<everything symlinked> except learn/how-a-spectrum-is-made, which is a real copy (patched per defect)
+  const docs = join(REPO, "docs/ism"), md = join(T, "docs/ism");
   mkdirSync(join(md, "learn"), {recursive: true});
   for (const e of readdirSync(docs)) if (e !== "learn") symlinkSync(join(docs, e), join(md, e));
   for (const e of readdirSync(join(docs, "learn"))) if (e !== "how-a-spectrum-is-made") symlinkSync(join(docs, "learn", e), join(md, "learn", e));

@@ -1,7 +1,7 @@
-// Unit checks of the head and tilt control math (docs/tng50/js/headmath.js): pose from the facial transformation matrix,
+// Unit checks of the head and tilt control math (docs/ism/js/headmath.js): pose from the facial transformation matrix,
 // the One Euro filter, the dead zone and sensitivity map, the off-axis projection and the tilt pose.
 // Usage: node tests/js/headctl_unit.mjs
-import {poseFromMatrix, matrixFromPose, oneEuro, deadGain, orbitMap, windowMap, frustum, symmetric, offAxis, tiltPose, stepToward} from "../../docs/tng50/js/headmath.js";
+import {poseFromMatrix, matrixFromPose, oneEuro, deadGain, orbitMap, windowMap, frustum, symmetric, offAxis, tiltPose, stepToward} from "../../docs/ism/js/headmath.js";
 
 let n = 0, bad = 0;
 const check = (ok, msg) => { n++; if (!ok) { bad++; console.log("FAIL " + msg); } else console.log("ok " + msg); };

@@ -28,7 +28,7 @@ import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const ROOT = join(REPO, "docs/tng50/learn/how-a-spectrum-is-made");
+const ROOT = join(REPO, "docs/ism/learn/how-a-spectrum-is-made");
 const argv = process.argv.slice(2), shotsDir = argv.includes("--shots") ? resolve(argv[argv.indexOf("--shots") + 1]) : null;
 let fails = 0, passes = 0;
 const ok = (c, msg) => { if (c) passes++; else { fails++; console.log("FAIL " + msg); } };
@@ -451,7 +451,7 @@ function fit(eqs, cls, band, lead = "OVI", u = 0.5) {
 }
 window.__eqt = {ov, events, show, fit, setSpec: s => { spec = {...spec, ...s}; }, ready: true};
 </script></body></html>`);
-  const srv = await serve({dir: join(REPO, "docs/tng50"), page});
+  const srv = await serve({dir: join(REPO, "docs/ism"), page});
   for (const [W, H, cls] of [[1440, 900, "desktop"], [390, 844, "phone portrait"], [320, 568, "narrow"]]) {
     const P = await launch({width: W, height: H, reducedMotion: false});
     try {

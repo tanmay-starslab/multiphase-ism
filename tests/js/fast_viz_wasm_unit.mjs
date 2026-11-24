@@ -1,4 +1,4 @@
-// Unit and performance tests for docs/tng50/js/fast_viz_wasm.js + fast_viz.wasm (compiled from rust_wasm_kernel):
+// Unit and performance tests for docs/ism/js/fast_viz_wasm.js + fast_viz.wasm (compiled from rust_wasm_kernel):
 // 1. wasm_cast_cube_ray: 5-level (L0..L4) trilinear and nearest-voxel ray-marching across all 18 fields (< 0.3 ms)
 // 2. wasm_synthesize_voigt_12ions: 12-ion Faddeeva/Humlicek Voigt optical-depth tau(v) and flux exp(-tau) synthesis (< 1.0 ms)
 // 3. wasm_decode_lut_volume & wasm_pack_velocity: SIMD128 LUT dequantization and RGBA packing parity with vizdata.js

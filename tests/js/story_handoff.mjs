@@ -1,6 +1,6 @@
 // Hand-off gate of the "How a spectrum is made" story, both directions (v1: PLAN_final §4, §6 story_handoff, eng P0-2;
 // v2: DESIGN_final §5.8 U_entry, the explorer's call to action, first-visit card and hint row, the B0 gate posters).
-// Usage: node tests/js/story_handoff.mjs [docs/tng50 dir] [--story learn/how-a-spectrum-is-made] [--page <explorer html>]
+// Usage: node tests/js/story_handoff.mjs [docs/ism dir] [--story learn/how-a-spectrum-is-made] [--page <explorer html>]
 //            [TNG_BROWSER=1: --port N --profile DIR --edge BIN --galaxies N --shots DIR]
 // --page: the explorer page to serve (default <dir>/index.html; a scratch export of _template.html works too).
 //
@@ -40,7 +40,7 @@ import {pathToFileURL} from "node:url";
 import {ROOT as REPO, parseArgs, checker, serve, launch, BLOCK, READY, sleep, SEP_CHARS} from "./lib/browser.mjs";
 
 const {pos, opt} = parseArgs(process.argv.slice(2));
-const DIR = resolve(pos[0] || join(REPO, "docs/tng50"));
+const DIR = resolve(pos[0] || join(REPO, "docs/ism"));
 const STORY = opt.story || "learn/how-a-spectrum-is-made";
 const SROOT = resolve(DIR, STORY), STEPS_F = join(SROOT, "steps.json"), PAGE = resolve(opt.page || join(DIR, "index.html"));
 const C = checker(), check = C.check, note = C.note;
@@ -410,7 +410,7 @@ await casesBrowser();
 process.exit(C.finish());
 
 /* ================================================================ Tier A picker in the browser (DESIGN_tierA §7.2, §10 R6)
-   A temp copy of the page (docs/tng50 symlinked, the story page copied) gets a story-index/2 with picker "cases" and every
+   A temp copy of the page (docs/ism symlinked, the story page copied) gets a story-index/2 with picker "cases" and every
    story listed (test only; the shipped index stays "off"). Software GL, reduced motion, stills tier (no cubes needed).
    - picker off: the shipped page's dialog list equals the cases page's dialog opened in flight (no Stories group in flight,
      G12) and the v2 markup is untouched;

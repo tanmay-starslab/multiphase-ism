@@ -2,7 +2,7 @@
 // scripts/story_music.py).
 //
 //   node tests/js/story_music.mjs                                  static checks (tracks, files, credits)
-//   TNG_BROWSER=1 node tests/js/story_music.mjs [docs/tng50] [--shots DIR] [--edge BIN]
+//   TNG_BROWSER=1 node tests/js/story_music.mjs [docs/ism] [--shots DIR] [--edge BIN]
 //
 // Static: sound.js lists Day One first (the default) and Beethoven; both loop files exist; media/music.json lists both
 // with their credits and the same files; Data and credits, the Read-as-text line, MUSIC_LICENSE.txt, README.md and
@@ -18,7 +18,7 @@ import {parseArgs, checker, launch, BLOCK, sleep} from "./lib/browser.mjs";
 import {REPO, STORY_REL, plainEdge, gzServe} from "./lib/storyqa.mjs";
 
 const {pos, opt} = parseArgs(process.argv.slice(2));
-const C = checker(), ROOT = join(REPO, "docs/tng50", STORY_REL), rd = f => readFileSync(join(REPO, f), "utf8");
+const C = checker(), ROOT = join(REPO, "docs/ism", STORY_REL), rd = f => readFileSync(join(REPO, f), "utf8");
 
 /* ---------------------------------------------------------------- static */
 const S = await import(pathToFileURL(join(ROOT, "js/ui/sound.js")).href);
@@ -35,13 +35,13 @@ const {creditSections} = await import(pathToFileURL(join(ROOT, "js/ui/menu.js"))
 const mus = (creditSections(1).find(s => s.h === "Music") || {p: []}).p.join(" ");
 const both = s => /Hans Zimmer, Day One \(Interstellar, 2014\)/.test(s) && /Beethoven, Symphony No\. 7/.test(s);
 C.check(both(mus), "Data and credits, Music: both tracks");
-const toCr = (rd(`docs/tng50/${STORY_REL}/index.html`).match(/<p class="to-cr">([^<]*)<\/p>/) || [])[1] || "";
+const toCr = (rd(`docs/ism/${STORY_REL}/index.html`).match(/<p class="to-cr">([^<]*)<\/p>/) || [])[1] || "";
 C.check(both(toCr), "Read-as-text credit line: both tracks");
-for (const f of [`docs/tng50/${STORY_REL}/media/MUSIC_LICENSE.txt`, "README.md", "THIRD_PARTY_LICENSES"]) C.check(both(rd(f).replace(/\s+/g, " ")), `${f}: both tracks`);
+for (const f of [`docs/ism/${STORY_REL}/media/MUSIC_LICENSE.txt`, "README.md", "THIRD_PARTY_LICENSES"]) C.check(both(rd(f).replace(/\s+/g, " ")), `${f}: both tracks`);
 
 /* ---------------------------------------------------------------- browser */
 if (!process.env.TNG_BROWSER) { C.note("browser part skipped (set TNG_BROWSER=1)"); process.exit(C.finish()); }
-const DIR = resolve(pos[0] || join(REPO, "docs/tng50")), SHOTS = opt.shots ? resolve(opt.shots) : null;
+const DIR = resolve(pos[0] || join(REPO, "docs/ism")), SHOTS = opt.shots ? resolve(opt.shots) : null;
 if (SHOTS) mkdirSync(SHOTS, {recursive: true});
 const srv = await gzServe(DIR), URL0 = srv.base + STORY_REL + "/index.html?nogate";
 const M = "window.__story && __story.music";

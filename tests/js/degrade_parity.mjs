@@ -1,5 +1,5 @@
 // Parity of the legacy v1 JS degrade port (tests/js/lib/legacy_degrade.js; it was the <script id="tngsight-degrade"> block of
-// docs/tng50/_template.html until Phase 3, when the page moved to js/fit.js degradeV) with the Python model.
+// docs/ism/_template.html until Phase 3, when the page moved to js/fit.js degradeV) with the Python model.
 // Usage: node tests/js/degrade_parity.mjs [reference.json]
 //   Without an argument it runs tests/js/make_reference.py ($PYTHON, default "python") into os.tmpdir().
 import {readFileSync} from "node:fs";

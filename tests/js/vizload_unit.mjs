@@ -1,4 +1,4 @@
-// Unit tests of the cube loader docs/tng50/js/vizload.js (fix-ui FE-01..FE-04, FE-15) in node, on the 16^3 fixture of
+// Unit tests of the cube loader docs/ism/js/vizload.js (fix-ui FE-01..FE-04, FE-15) in node, on the 16^3 fixture of
 // make_viz_fixture.py. fetch, CacheStorage, createImageBitmap and OffscreenCanvas are mocked (node decodes no WebP:
 // the mock hands back the PIL-decoded <part>.rgba of the fetched bytes). Checks: a host that accepts the connection
 // but never answers ends in HostError after the stall timeout, with no .gz request after the stalled parts; corrupt
@@ -44,7 +44,7 @@ globalThis.fetch = async (url, opts) => { log.push(url); if (override) { const r
   const p = url.replace(/^https:\/\/h\.test\/(fb\/)?/, ""), f = join(dir, p);
   if (!existsSync(f)) return new Response("not found", {status: 404});
   return new Response(readFileSync(f), {status: 200, headers: {"Content-Type": "application/octet-stream"}}); };
-const {makeLoader, HostError} = await import("../../docs/tng50/js/vizload.js");
+const {makeLoader, HostError} = await import("../../docs/ism/js/vizload.js");
 const gc = M.gas.fields.nH.cubes.L1, B = "https://h.test/";
 const reset = () => { STORE.clear(); log = []; override = null; bitmapFail = false; putDelay = 0; puts = 0; };
 const flush = () => new Promise(r => setTimeout(r, 50));
@@ -118,7 +118,7 @@ reset();
   check(e instanceof HostError && !/Failed to fetch; Failed to fetch/.test(e.message) && /Failed to fetch/.test(e.message), `deduplicated error message: "${e?.message}"`); }
 
 /* final: vizdata.loadManifestV2 through vizload.fetchText times out on a host that never answers (?viz= hang) */
-{ reset(); const {fetchText} = await import("../../docs/tng50/js/vizload.js"), {loadManifestV2} = await import("../../docs/tng50/js/vizdata.js");
+{ reset(); const {fetchText} = await import("../../docs/ism/js/vizload.js"), {loadManifestV2} = await import("../../docs/ism/js/vizdata.js");
   override = (u, o) => new Promise((_, rej) => o.signal.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError"))));
   const t0 = Date.now(); let e = null; try { await loadManifestV2("https://hang.test/manifest_v2.json", {fetchText, timeoutMs: 800}); } catch (x) { e = x; }
   const dt = Date.now() - t0;

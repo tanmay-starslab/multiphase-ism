@@ -13,7 +13,7 @@
  "R200c_kpc": 0.5,
  "M200c_Msun": 80000000000.0,
  "Mstar_Msun": 800000000.0,
- "SFR_Msun_yr": 0.15,
+ "SFR_Msun_yr": 1.25,
  "Lhat": [
   0.0,
   0.0,
