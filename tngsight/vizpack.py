@@ -248,7 +248,7 @@ def encode_webp(img) -> bytes:
     a = np.ascontiguousarray(img, dtype=np.uint8)
     mode = "L" if a.ndim == 2 else ("RGBA" if a.shape[2] == 4 else "RGB")
     buf = io.BytesIO()
-    Image.fromarray(a, mode).save(buf, "WEBP", lossless=True, quality=100, method=6, exact=True)
+    Image.fromarray(a, mode).save(buf, "WEBP", lossless=True, quality=75, method=1, exact=True)
     return buf.getvalue()
 
 
@@ -263,7 +263,7 @@ def decode_webp(b) -> np.ndarray:
 # ============================================================================== §2.5 gzip, §2.6 files
 def gzip_bytes(raw) -> bytes:
     buf = io.BytesIO()
-    with gzip.GzipFile(filename="", mode="wb", compresslevel=9, fileobj=buf, mtime=0) as g:
+    with gzip.GzipFile(filename="", mode="wb", compresslevel=6, fileobj=buf, mtime=0) as g:
         g.write(raw)
     return buf.getvalue()
 

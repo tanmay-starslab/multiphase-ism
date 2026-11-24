@@ -1,4 +1,4 @@
-// JS lupton() (docs/tng50/js/vizdata.js) vs tngsight.vizpack.lupton_rgb (design §4.5, §5.11 item 2): 200 fixture
+// JS lupton() (docs/ism/js/vizdata.js) vs tngsight.vizpack.lupton_rgb (design §4.5, §5.11 item 2): 200 fixture
 // inputs, ≤ 1/255 per channel; flat-AB source is neutral, Σ = 0 is black, saturation preserves hue.
 // Usage: node tests/js/lupton_parity.mjs [fixture dir]
 import {readFileSync, mkdtempSync} from "node:fs";
@@ -6,7 +6,7 @@ import {execFileSync} from "node:child_process";
 import {tmpdir} from "node:os";
 import {join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
-import {lupton, MU_ZERO} from "../../docs/tng50/js/vizdata.js";
+import {lupton, MU_ZERO} from "../../docs/ism/js/vizdata.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 let dir = process.argv[2];

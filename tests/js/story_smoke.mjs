@@ -1,5 +1,5 @@
 // Browser smoke gate of the "How a spectrum is made" story (PLAN_final §6 story_smoke, §2.4, §7; critique_ux checks).
-// Usage: TNG_BROWSER=1 node tests/js/story_smoke.mjs [docs/tng50 dir] [--story learn/how-a-spectrum-is-made]
+// Usage: TNG_BROWSER=1 node tests/js/story_smoke.mjs [docs/ism dir] [--story learn/how-a-spectrum-is-made]
 //            [--port N] [--profile DIR] [--edge BIN] [--shots DIR]
 // Without TNG_BROWSER=1 it prints "skipped"; with it and no story page it prints "skipped" too (STORY_REQUIRE=1 fails).
 // The story runs without WebGL, so when TNG_EDGE is the reduced-motion wrapper (".../headless-rm") the plain sibling
@@ -38,7 +38,7 @@ import {ROOT as REPO, parseArgs, checker, serve, launch, BLOCK, sepHits, sleep} 
 
 if (!process.env.TNG_BROWSER) { console.log("skipped (set TNG_BROWSER=1 to run the story smoke test)"); process.exit(0); }
 const {pos, opt} = parseArgs(process.argv.slice(2));
-const DIR = resolve(pos[0] || join(REPO, "docs/tng50"));
+const DIR = resolve(pos[0] || join(REPO, "docs/ism"));
 const STORY = opt.story || "learn/how-a-spectrum-is-made";
 const SROOT = resolve(DIR, STORY), PAGE = join(SROOT, "index.html"), STEPS_F = join(SROOT, "steps.json");
 if (!existsSync(PAGE) || !existsSync(STEPS_F)) {

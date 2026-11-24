@@ -1,6 +1,6 @@
 // Hand control in a headless Chromium with a fake camera that shows an open hand (tests/js/fixtures/hand_open_palm.jpg,
 // "Man in hood stretching hand" by sandeeep on Unsplash, CC0 via Wikimedia Commons, cropped and scaled).
-// Usage: TNG_BROWSER=1 node tests/js/handctl_browser.mjs [docs/tng50] [--viz DIR] [--edge BIN] [--shots DIR]
+// Usage: TNG_BROWSER=1 node tests/js/handctl_browser.mjs [docs/ism] [--viz DIR] [--edge BIN] [--shots DIR]
 // It builds a short y4m of the hand panning sideways with ffmpeg ($FFMPEG, else ffmpeg on PATH, else
 // ~/.conda/envs/cgm/bin/ffmpeg; skipped when none is found). Two camera sessions (model loading is slow on a busy CPU node):
 // at 1440 px (desktop), Hands-free (head and hands together, the only mode):
@@ -23,7 +23,7 @@ if (!process.env.TNG_BROWSER) { console.log("skipped (set TNG_BROWSER=1 to run t
 const {pos, opt} = parseArgs(process.argv.slice(2));
 const FF = [process.env.FFMPEG, "ffmpeg", join(homedir(), ".conda/envs/cgm/bin/ffmpeg")].filter(Boolean).find(f => { try { execFileSync(f, ["-version"], {stdio: "ignore"}); return true; } catch { return false; } });
 if (!FF) { console.log("skipped (no ffmpeg to build the fake camera video; set FFMPEG)"); process.exit(0); }
-const DIR = resolve(pos[0] || join(ROOT, "docs/tng50")), PAGE = pickPage(DIR, opt.page), SHOTS = opt.shots && resolve(opt.shots);
+const DIR = resolve(pos[0] || join(ROOT, "docs/ism")), PAGE = pickPage(DIR, opt.page), SHOTS = opt.shots && resolve(opt.shots);
 const work = join(tmpdir(), `handctl-${process.pid}`); mkdirSync(work, {recursive: true});
 const Y4M = join(work, "hand.y4m");
 execFileSync(FF, ["-hide_banner", "-loglevel", "error", "-y", "-loop", "1", "-i", join(ROOT, "tests/js/fixtures/hand_open_palm.jpg"),

@@ -3,7 +3,7 @@
 Native path: the exact Gaussian LSF (FWHM = c/R) of the native 0.25 km/s point samples exp(-tau), evaluated at the
 output pixels (written out below, independent of tngsight.degrade).
 Web path: what the page and the browser fitter see: tngsight.library.web_flux (the 1 km/s box average), the TNGS v2
-u16 round trip (encode_web, decode_web), then tngsight.degrade.degrade_v (docs/tng50/js/fit.js degradeV is the same
+u16 round trip (encode_web, decode_web), then tngsight.degrade.degrade_v (docs/ism/js/fit.js degradeV is the same
 operator; tests/js/fit_degrade.mjs runs it on the same lines against the same native reference).
 Stored data: tests/js/fixtures/fit_native_edge_b100_a090.json, a trimmed copy of the native optical depth of 8 lines
 of one library npz (tests/js/make_fit_fixture.py write_native). Each line is zero-padded so the LSF never meets an edge.

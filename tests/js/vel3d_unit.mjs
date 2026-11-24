@@ -1,13 +1,13 @@
-// vel3d (3D velocity views): the pure helpers in docs/tng50/js/vizdata.js and colormaps.js, and the shader text in
+// vel3d (3D velocity views): the pure helpers in docs/ism/js/vizdata.js and colormaps.js, and the shader text in
 // raymarch.js. Linear decoding (q = 128 is 0 km/s), the CPU packing of vx, vy, vz into one RGBA cube (empty voxels as
 // q 128 with A = 0, so a trilinear blend divided by the blended A is the mean over the non-empty corners), the five derived
 // quantities on hand-built vectors (v_los flips sign when the camera direction is reversed, v_phi > 0 for co-rotation,
 // v_r > 0 for outflow), the ray moments (σ_los is unchanged by reversing the ray), the velocity LUTs and the texture-unit
 // budget of the fragment shader. No Python, no browser.
 // Usage: node tests/js/vel3d_unit.mjs
-import {decodeLinear, encodeLinear, packVelocity, velQuantity, velRayMoment, VEL_VIEWS, VEL_KEYS, velocityList} from "../../docs/tng50/js/vizdata.js";
-import {lut, NAMES, VEL_NAMES, VEL_STOPS} from "../../docs/tng50/js/colormaps.js";
-import {FRAG, makeMaterial} from "../../docs/tng50/js/raymarch.js";
+import {decodeLinear, encodeLinear, packVelocity, velQuantity, velRayMoment, VEL_VIEWS, VEL_KEYS, velocityList} from "../../docs/ism/js/vizdata.js";
+import {lut, NAMES, VEL_NAMES, VEL_STOPS} from "../../docs/ism/js/colormaps.js";
+import {FRAG, makeMaterial} from "../../docs/ism/js/raymarch.js";
 
 let fails = 0; const check = (ok, msg) => { console.log(`${ok ? "ok  " : "FAIL"} ${msg}`); if (!ok) fails++; };
 const near = (a, b, e = 1e-6) => Math.abs(a - b) <= e;

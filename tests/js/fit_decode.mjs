@@ -1,11 +1,11 @@
-// TNGS v2 decoder hardening (Phase-3 Code 4): docs/tng50/js/fit.js decodeTNGS on the crafted blobs of
+// TNGS v2 decoder hardening (Phase-3 Code 4): docs/ism/js/fit.js decodeTNGS on the crafted blobs of
 // tests/js/fixtures/fit_tngs_cases.json (written by tests/js/make_fit_fixture.py tngs_cases(), with the expected outcome
 // of each case written out by hand there). tests/test_tngsight.py runs the same blobs through
 // tngsight.library.decode_web, so both decoders accept and refuse the same set with the same lines and skipped keys.
 import {readFileSync} from "node:fs";
 import {join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
-import {decodeTNGS, REGISTRY_KEYS} from "../../docs/tng50/js/fit.js";
+import {decodeTNGS, REGISTRY_KEYS} from "../../docs/ism/js/fit.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = join(HERE, "..", "..");
 const fx = JSON.parse(readFileSync(join(HERE, "fixtures", "fit_tngs_cases.json"), "utf8"));

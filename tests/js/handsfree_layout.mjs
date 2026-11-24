@@ -14,7 +14,7 @@ import {join, resolve} from "node:path";
 import {launch, serve, BLOCK, parseArgs, sleep, ROOT, checker, pickPage} from "./lib/browser.mjs";
 
 if (!process.env.TNG_BROWSER) { console.log("skipped (set TNG_BROWSER=1 and pass --viz DIR to run the Hands-free layout test)"); process.exit(0); }
-const {opt} = parseArgs(process.argv.slice(2)), VIZ = resolve(opt.viz || process.env.TNG_VIZ || ""), DOCS = resolve(opt.docs || join(ROOT, "docs/tng50"));
+const {opt} = parseArgs(process.argv.slice(2)), VIZ = resolve(opt.viz || process.env.TNG_VIZ || ""), DOCS = resolve(opt.docs || join(ROOT, "docs/ism"));
 if (!existsSync(join(VIZ, "manifest_v2.json"))) { console.error("--viz DIR (or TNG_VIZ) with a manifest_v2.json is required"); process.exit(2); }
 const SHOTS = opt.shots && resolve(opt.shots), ONLY = opt.only ? String(opt.only).split(",") : null, THEMES = String(opt.themes || "dark,light").split(",");
 // [name, CSS width, CSS height, device scale factor, mobile]: laptops at 100 %, 125 % and 150 % Windows scaling, wide screens, phones

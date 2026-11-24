@@ -27,7 +27,7 @@ export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..")
 export const sleep = ms => new Promise(r => setTimeout(r, ms));
 export const RESERVED_PORTS = [8787, 8000];
 /** Requests every test blocks: the owner's laptop server and the hosted backends/cubes (tests never depend on them).
- *  *.sslip.io is the public VM backend a docs/tng50 export lists, so a test of the repo page never probes it. */
+ *  *.sslip.io is the public VM backend a docs/ism export lists, so a test of the repo page never probes it. */
 export const BLOCK = ["*://127.0.0.1:8787/*", "*://localhost:8787/*", "*.hf.space/*", "*.sslip.io/*", "*://huggingface.co/*", "*://*.huggingface.co/*"];
 
 /** argv -> {pos: [...positional], opt: {flag: value|true}} ("--flag value" or a bare "--flag"). */
@@ -250,7 +250,7 @@ export async function launch(opts = {}) {
 /** The expression a page is "ready" by: the v3 bridge exists and a panel hit box is laid out (or the 3D tab is shown). */
 export const READY = `window.tngApp && tngApp.version >= 3 && typeof tngApp.getState === "function" && tngApp.getState().id && (document.querySelector('[data-testid^="panel-"]') || tngApp.getState().tab === "3d")`;
 
-/** The page file to test in a docs/tng50-like dir: --page, else an exported Phase-3 index.html, else _template.html. */
+/** The page file to test in a docs/ism-like dir: --page, else an exported Phase-3 index.html, else _template.html. */
 export function pickPage(dir, explicit) {
   if (explicit) return resolve(explicit);
   const ix = join(dir, "index.html");

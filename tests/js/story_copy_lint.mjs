@@ -1,5 +1,5 @@
 // Copy lint of the v2 story "How a spectrum is made" (DESIGN_final §5.7 U_copy, gate G10 copy part). No browser.
-// Usage: node tests/js/story_copy_lint.mjs [docs/tng50 dir] [--story learn/how-a-spectrum-is-made] [--data <story json>]
+// Usage: node tests/js/story_copy_lint.mjs [docs/ism dir] [--story learn/how-a-spectrum-is-made] [--data <story json>]
 //        node tests/js/story_copy_lint.mjs --migrate OUT.json   (writes the mechanical story-copy/3 migration of copy.json)
 // Copy resolver (R5a): when ROOT is present the lint also checks that on-screen text (hud.activeText + kinetic.copyEntry),
 // the narrative (narrativeItems) and this lint (activeStrings) make the shared resolver's choice (derive.js resolveLine /
@@ -32,8 +32,8 @@ import {pathToFileURL} from "node:url";
 import {ROOT as REPO, parseArgs, checker, sepHits} from "./lib/browser.mjs";
 // the one copy resolver (DESIGN_tierA §7.1, R5a): the lint, kinetic/hud, narrative and the director all call it
 import {pickVariant, resolveLine, extrasOf, whenHolds, candidates, lineEntry, activeLines, beatSkip as dBeatSkip,
-  activeText as dActiveText, VARIANT_TEXT, caseLines, caseChip, claimsHold, caseOf, attachCases} from "../../docs/tng50/learn/how-a-spectrum-is-made/js/copy/derive.js";
-import {narrativeItems as narItems} from "../../docs/tng50/learn/how-a-spectrum-is-made/js/ui/narrative.js";
+  activeText as dActiveText, VARIANT_TEXT, caseLines, caseChip, claimsHold, caseOf, attachCases} from "../../docs/ism/learn/how-a-spectrum-is-made/js/copy/derive.js";
+import {narrativeItems as narItems} from "../../docs/ism/learn/how-a-spectrum-is-made/js/ui/narrative.js";
 
 /** whenFlags: the flag names a `when` mentions (string or AND array; "!f"; "a|b"). */
 export const whenFlags = when => (when == null ? [] : [].concat(when)).flatMap(el => String(el).split("|"))
@@ -836,7 +836,7 @@ export function caseSelfTest(copy, stories) {
 /* ---------------------------------------------------------------- CLI */
 async function main() {
   const {pos, opt} = parseArgs(process.argv.slice(2));
-  const DIR = resolve(pos[0] || join(REPO, "docs/tng50"));
+  const DIR = resolve(pos[0] || join(REPO, "docs/ism"));
   const ROOTD = join(DIR, opt.story || "learn/how-a-spectrum-is-made");
   const F = join(ROOTD, "copy.json");
   const {check, note, finish} = checker();

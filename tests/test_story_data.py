@@ -1,6 +1,6 @@
 """Story data for the Learn page "How a spectrum is made" (PLAN_final section 6).
 
-Reads only the shipped files in docs/tng50/learn/how-a-spectrum-is-made/data (no cutout, no library needed), plus
+Reads only the shipped files in docs/ism/learn/how-a-spectrum-is-made/data (no cutout, no library needed), plus
 the stored library sightline when it is on disk (skipped otherwise). Every story listed in data/index.json is checked,
 so a story exported for another galaxy is held to the same rules as the reference one (488530, rand_b062_a062).
 """
@@ -1040,7 +1040,7 @@ def test_tier_a_leaves_hero_and_index_untouched():
     additively (story-index/2: the base's keys and hero entry kept, Tier A entries appended)"""
     import subprocess
     def base(rel):
-        path = f"docs/tng50/learn/how-a-spectrum-is-made/data/{rel}"
+        path = f"docs/ism/learn/how-a-spectrum-is-made/data/{rel}"
         r = subprocess.run(["git", "-C", str(REPO), "show", f"{HERO_BASE}:{path}"], capture_output=True)
         if r.returncode != 0:
             pytest.skip(f"git base {HERO_BASE} not available")

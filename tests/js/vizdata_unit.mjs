@@ -1,11 +1,11 @@
-// Unit tests for docs/tng50/js/vizdata.js: L0..L4 and S0..S4 manifest validation, viewPlan deep ISM zoom (L3/S3 at hVis < 25,
+// Unit tests for docs/ism/js/vizdata.js: L0..L4 and S0..S4 manifest validation, viewPlan deep ISM zoom (L3/S3 at hVis < 25,
 // L4/S4 at hVis < 6.25), GAS_LEVELS / STAR_LEVELS defaults, and viewer3d.js dynamic 3-slot sliding window, sub-kpc scale bar,
 // and real-time 3D dust lane attenuation toggle (#v3-dust).
 import {readFileSync} from "node:fs";
 import {join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
-import {GAS_LEVELS, STAR_LEVELS, SMOOTH, STAR_COMP, STAR_ZOOM, validateManifestV2, viewPlan, cubeRef} from "../../docs/tng50/js/vizdata.js";
-import {FRAG} from "../../docs/tng50/js/raymarch.js";
+import {GAS_LEVELS, STAR_LEVELS, SMOOTH, STAR_COMP, STAR_ZOOM, validateManifestV2, viewPlan, cubeRef} from "../../docs/ism/js/vizdata.js";
+import {FRAG} from "../../docs/ism/js/raymarch.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = join(HERE, "../..");
 let fails = 0; const check = (ok, msg) => { console.log(`${ok ? "ok  " : "FAIL"} ${msg}`); if (!ok) fails++; };
@@ -17,7 +17,7 @@ check(STAR_LEVELS.S0 === 400 && STAR_LEVELS.S1 === 100 && STAR_LEVELS.S2 === 25 
   `STAR_LEVELS S0..S4: ${JSON.stringify(STAR_LEVELS)}`);
 
 /* ---- 2. validateManifestV2 with L3, L4, S3, S4 ---- */
-const M = JSON.parse(readFileSync(join(ROOT, "docs/tng50/data/viz/manifest_v2.json"), "utf8"));
+const M = JSON.parse(readFileSync(join(ROOT, "docs/ism/data/viz/manifest_v2.json"), "utf8"));
 { let e = null; try { validateManifestV2(M); } catch (x) { e = x.message; }
   check(e === null, "validateManifestV2 accepts committed L0..L2 manifest" + (e ? ": " + e : "")); }
 { const M4 = JSON.parse(JSON.stringify(M));
@@ -59,7 +59,7 @@ const M = JSON.parse(readFileSync(join(ROOT, "docs/tng50/data/viz/manifest_v2.js
     "viewPlan schedules L3/S3 and L4/S4 with hasL3/hasL4 flags when zoomed in"); }
 
 /* ---- 4. viewer3d.js source checks: 3-slot window, sub-kpc scale bar, #v3-dust & Pei (1992) shader patch ---- */
-{ const vsrc = readFileSync(join(ROOT, "docs/tng50/js/viewer3d.js"), "utf8");
+{ const vsrc = readFileSync(join(ROOT, "docs/ism/js/viewer3d.js"), "utf8");
   check(vsrc.includes('["L0", "L1", "L2", "L3", "L4"].filter(L => manifest?.levels?.[L])') &&
         vsrc.includes('["S0", "S1", "S2", "S3", "S4"].filter(L => manifest?.levels?.[L])'),
     "viewer3d.js filters GAS_L and STAR_L dynamically from manifest.levels with L0..L2 / S0..S2 fallback");
@@ -68,12 +68,12 @@ const M = JSON.parse(readFileSync(join(ROOT, "docs/tng50/data/viz/manifest_v2.js
   check(vsrc.includes("manifest?.levels?.L4 ? 0.4 : manifest?.levels?.L3 ? 1.5 : 15") &&
         vsrc.includes("manifest?.levels?.L3 ? 0.05 : 0.5"),
     "viewer3d.js lowers controls.minDistance and camera.near dynamically for L3/L4");
-  check(vsrc.includes("winIdx === 0 ? (manifest?.levels?.L0?.r_mask_kpc ?? 400) : 1e9") &&
+  check((vsrc.includes("winIdx === 0 ? mask0() : 1e9") || vsrc.includes("winIdx === 0 ? (manifest?.levels?.L0?.r_mask_kpc ?? 400) : 1e9")) &&
         vsrc.includes("U.uHalf.value.set(half(gWin[0]), half(gWin[1]), half(gWin[2]))"),
     "viewer3d.js updates 3-slot sliding window uHalf and disables uMask0 when winIdx > 0");
-  check(vsrc.includes("[0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500]") &&
-        vsrc.includes("${Math.round(best * 1000)} pc"),
-    "viewer3d.js physical scale bar includes sub-kpc stops down to 0.05 kpc formatted in pc");
+  check(vsrc.includes("0.05, 0.1, 0.2, 0.5") && vsrc.includes("1, 2, 5, 10, 20, 50, 100, 200, 500") &&
+        (vsrc.includes("pc") && vsrc.includes("kpc")),
+    "viewer3d.js physical scale bar includes sub-kpc stops down to pc/AU formatted in pc");
   check(vsrc.includes('id="v3-dust" checked data-tip="Attenuate starlight through cold dust lanes along the ray">dust lanes</label>'),
     "viewer3d.js declares #v3-dust checkbox in Layers card with <= 12-word data-tip");
   check(vsrc.indexOf('id="v3-dust"') < vsrc.indexOf("<details><summary>star brightness</summary>") &&

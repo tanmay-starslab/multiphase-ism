@@ -12,10 +12,10 @@
 import {readFileSync, existsSync} from "node:fs";
 import {join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
-import {decodeTNGS, fitPanel, degradeV, tauVoigt} from "../../docs/tng50/js/fit.js";
-import * as K from "../../docs/tng50/learn/how-a-spectrum-is-made/js/plot.js";
+import {decodeTNGS, fitPanel, degradeV, tauVoigt} from "../../docs/ism/js/fit.js";
+import * as K from "../../docs/ism/learn/how-a-spectrum-is-made/js/plot.js";
 
-const HERE = dirname(fileURLToPath(import.meta.url)), REPO = join(HERE, "..", ".."), TNG = join(REPO, "docs", "tng50");
+const HERE = dirname(fileURLToPath(import.meta.url)), REPO = join(HERE, "..", ".."), TNG = join(REPO, "docs", "ism");
 const ROOT = join(TNG, "learn", "how-a-spectrum-is-made"), DATA = join(ROOT, "data");
 const SCENES = ["dip", "speed", "sum", "saturation", "lsf", "noise", "fit", "yourturn"];
 let fails = 0, nchk = 0;

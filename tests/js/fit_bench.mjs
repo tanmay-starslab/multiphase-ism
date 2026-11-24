@@ -1,10 +1,10 @@
-// Speed of docs/tng50/js/fit.js fitPanel on 240 panels: 5 fixture sightlines x 12 ions x the 4-case R x S/N grid of
+// Speed of docs/ism/js/fit.js fitPanel on 240 panels: 5 fixture sightlines x 12 ions x the 4-case R x S/N grid of
 // each band (design-3 section 8 U_fit 4: median <= 60 ms, p95 <= 300 ms, max <= 1000 ms, no panel at capMs).
 // Usage: node tests/js/fit_bench.mjs [--json out.json]
 import {readFileSync, writeFileSync} from "node:fs";
 import {join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
-import {fitPanel, degradeV, decodeTNGS, seedFor, FIT_PARAMS} from "../../docs/tng50/js/fit.js";
+import {fitPanel, degradeV, decodeTNGS, seedFor, FIT_PARAMS} from "../../docs/ism/js/fit.js";
 
 const FIX = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const fx = JSON.parse(readFileSync(join(FIX, "fit_cases.json"), "utf8"));

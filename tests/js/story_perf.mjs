@@ -5,7 +5,7 @@
 //   node tests/js/story_perf.mjs --bench F.json         G5b: the owner's laptop `?bench=1` JSON (U_stage's S0 shape or flat
 //                                                       {p50, p95, scale}): p50 <= 10 ms, p95 <= 16.7 ms, governor scale >= 0.5
 //                                                       ("0.5h" passes, "0.35h" fails; S0 §2)
-//   TNG_BROWSER=1 TNG_GPU=1 node tests/js/story_perf.mjs [docs/tng50] [--speed 4] [--out DIR] [--allow-software]
+//   TNG_BROWSER=1 TNG_GPU=1 node tests/js/story_perf.mjs [docs/ism] [--speed 4] [--out DIR] [--allow-software]
 //        [--no-vsync] [--edge BIN] [--width 1440 --height 900] [--query "?x=1"]
 //        [--viz DIR|none] [--three FILE|none]: local cubes and three (default: the 488530 cubes, U_stage's three);
 //        the run waits for a bound cube level and fails G5a if the volume never becomes resident
@@ -54,7 +54,7 @@ C.note(`G5a: scale ${G.scale}, frame p95 <= ${G.p95Max}, volume p50 <= ${G.volP5
 if (!process.env.TNG_BROWSER) { C.note("browser part skipped (set TNG_BROWSER=1; run on a GPU node)"); process.exit(C.finish()); }
 
 const MOCK = !!opt.mock;
-const DIR = MOCK ? FIX_DIR : resolve(pos[0] || join(REPO, "docs/tng50")), PAGE = MOCK ? join(FIX_DIR, "mock_story.html") : join(DIR, STORY_REL, "index.html"), OUT = opt.out ? resolve(opt.out) : null;
+const DIR = MOCK ? FIX_DIR : resolve(pos[0] || join(REPO, "docs/ism")), PAGE = MOCK ? join(FIX_DIR, "mock_story.html") : join(DIR, STORY_REL, "index.html"), OUT = opt.out ? resolve(opt.out) : null;
 if (!existsSync(PAGE)) { C.check(process.env.STORY_REQUIRE !== "1", `no story page at ${relative(REPO, PAGE)}`); process.exit(C.finish()); }
 if (OUT) mkdirSync(OUT, {recursive: true});
 const OBS = `(() => { const Q = window.__qaPerf = {long: [], fieldMs: [], t0: performance.now()};

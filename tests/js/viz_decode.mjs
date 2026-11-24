@@ -1,4 +1,4 @@
-// Phase-2b cube decoding (design §5.11 item 1): docs/tng50/js/vizdata.js against tngsight.vizpack (or the spec
+// Phase-2b cube decoding (design §5.11 item 1): docs/ism/js/vizdata.js against tngsight.vizpack (or the spec
 // fallback in make_viz_fixture.py). atlasToRaw of the PIL-decoded WebP parts reproduces the raw bytes (sha256), the
 // gz path gives exact bytes, a wrong length is an error, decodeU8 matches dequantize (≤ 1e-6), and
 // validateManifestV2 accepts the fixture and rejects 5 mutations. Phase 3: VOL_KEYS and the 3D species menu follow the
@@ -10,7 +10,7 @@ import {tmpdir} from "node:os";
 import {join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
 import {atlasToRaw, gunzipIfNeeded, sha256Hex, sha256Js, decodeU8, validateManifestV2, cubeRef, cubeUrls, VOL_KEYS, ION_KEYS, ION_FALLBACK, speciesList,
-  velocityInfo, velocityList, decodeLinear, packVelocity} from "../../docs/tng50/js/vizdata.js";
+  velocityInfo, velocityList, decodeLinear, packVelocity} from "../../docs/ism/js/vizdata.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 let dir = process.argv[2];

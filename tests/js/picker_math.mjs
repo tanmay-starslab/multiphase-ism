@@ -5,7 +5,7 @@ import {execFileSync} from "node:child_process";
 import {tmpdir} from "node:os";
 import {join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
-import {rayPlane, clampRadius, lineMetrics, canonical, customId, validate, roundHalfEven, tenths} from "../../docs/tng50/js/picker.js";
+import {rayPlane, clampRadius, lineMetrics, canonical, customId, validate, roundHalfEven, tenths} from "../../docs/ism/js/picker.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 let ref = process.argv[2];

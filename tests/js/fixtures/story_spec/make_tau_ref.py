@@ -14,7 +14,7 @@ import numpy as np
 from scipy.special import wofz
 
 root = Path(sys.argv[1])
-data = json.loads((root / "docs/tng50/learn/how-a-spectrum-is-made/data/story_488530_rand_b062_a062.json").read_text())
+data = json.loads((root / "docs/ism/learn/how-a-spectrum-is-made/data/story_488530_rand_b062_a062.json").read_text())
 out = root / "tests/js/fixtures/story_spec/tau_ref.json"
 
 g = data["geometry"]["cells"]

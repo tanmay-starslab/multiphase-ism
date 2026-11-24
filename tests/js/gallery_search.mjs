@@ -1,8 +1,8 @@
-// Gallery search (docs/tng50/js/gallery.js, UX round 4 fix RC2): parseQuery and matches, no browser. A symbol and the
+// Gallery search (docs/ism/js/gallery.js, UX round 4 fix RC2): parseQuery and matches, no browser. A symbol and the
 // number after it ("b 62", "b62", "phi 90", "Φ 90", "L 300") match that field's shown value exactly; a lone number
 // matches a whole field value (b, Φ, L, seed), never digits inside the id; words match id, orientation or "yours".
 // Usage: node tests/js/gallery_search.mjs
-import {parseQuery, matches} from "../../docs/tng50/js/gallery.js";
+import {parseQuery, matches} from "../../docs/ism/js/gallery.js";
 import {checker} from "./lib/browser.mjs";
 
 const C = checker(), check = C.check;

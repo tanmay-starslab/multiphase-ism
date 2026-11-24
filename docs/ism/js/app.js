@@ -5,19 +5,19 @@
 // Rendering is in spectra.js, the instrument sliders in instrument.js, the sightline picker in gallery.js and the
 // pure state (hash, slider maps, validation) in state.js.
 import {makeRegistry, cloneState, casesFor, bandsOf, clampView, parseHash, formatHash, instrumentPatch, ID_RE, LAYOUTS,
-  fmtR, fmtNum, minus, nf, annotateLimits, fitClass, fitLimits} from "./state.js?v=20261123d";
-import {createSpectra} from "./spectra.js?v=20261123d";
-import {createGallery, kindOf, nShow, sightLabel, sightTip, copyText} from "./gallery.js?v=20261123d";
-import {createInstrument} from "./instrument.js?v=20261123d";
-import * as FITM from "./fit.js?v=20261123d";
-import {initTips, ION_TIPS} from "./tips.js?v=20261123d";
-import {initFeatures} from "./features.js?v=20261123d";   /* ux4 features: share, keys, random, undo, solo, CSV, loading */
-import {initLiquidTabs, initLiquidSeg, initLiquidButtons} from "./liquidtabs.js?v=20261123d";   /* CSS-only liquid drop (tabs, segmented rows) and glossy top-bar buttons */
-import {initLiquidBg} from "./liquidbg.js?v=20261123d";   /* liquid metal shader background (3D tab; Spectra only with SPECTRA_BG) */
-import {uiSound, sfx} from "./uisound.js?v=20261123d";   /* optional UI sound effects (off by default; top-bar switch #sfx) */
+  fmtR, fmtNum, minus, nf, annotateLimits, fitClass, fitLimits} from "./state.js?v=20261123f";
+import {createSpectra} from "./spectra.js?v=20261123f";
+import {createGallery, kindOf, nShow, sightLabel, sightTip, copyText} from "./gallery.js?v=20261123f";
+import {createInstrument} from "./instrument.js?v=20261123f";
+import * as FITM from "./fit.js?v=20261123f";
+import {initTips, ION_TIPS} from "./tips.js?v=20261123f";
+import {initFeatures} from "./features.js?v=20261123f";   /* ux4 features: share, keys, random, undo, solo, CSV, loading */
+import {initLiquidTabs, initLiquidSeg, initLiquidButtons} from "./liquidtabs.js?v=20261123f";   /* CSS-only liquid drop (tabs, segmented rows) and glossy top-bar buttons */
+import {initLiquidBg} from "./liquidbg.js?v=20261123f";   /* liquid metal shader background (3D tab; Spectra only with SPECTRA_BG) */
+import {uiSound, sfx} from "./uisound.js?v=20261123f";   /* optional UI sound effects (off by default; top-bar switch #sfx) */
 import {galaxyIndex, resolveGalaxy, parseGalaxy, galaxyHashPart, packFor, createGalaxyPicker, galaxyTip, unlistedGalaxy,
-  nearestSightline, defaultSightline, srcOf, galaxySummary, normId, isFire, inferSim, inferSimKey, SIM_META, SIM_ORDER, galNoun, galShortLabel} from "./galaxies.js?v=20261123d";
-import {tier, tierReady} from "./tier.js?v=20261123d";   /* perf R5: device tier (html[data-tier]) and its one-off WebGL probe */
+  nearestSightline, defaultSightline, srcOf, galaxySummary, normId, isFire, inferSim, inferSimKey, SIM_META, SIM_ORDER, galNoun, galShortLabel} from "./galaxies.js?v=20261123f";
+import {tier, tierReady} from "./tier.js?v=20261123f";   /* perf R5: device tier (html[data-tier]) and its one-off WebGL probe */
 const {degradeV, decodeTNGS, seedFor, cacheKey, fitPanel, FIT_VERSION, FIT_PARAMS} = FITM;
 
 /* ---------------- config ---------------- */
@@ -25,7 +25,7 @@ const CFG = Object.assign({
   version: 3, catalog_url: "data/catalog.json", bin_dir: "data/s/", backends: ["http://127.0.0.1:8787"],
   galaxy: {sim: "TNG50-1", snapshot: 99, redshift: 0, subhalo_id: 488530}, ions: [], bands: {}, snr: {min: 2, max: 100, default: 10, pair: [20, 5]},
   defaults: {id: "edge_b100_a090"}, viz: null, components_url: "data/components.json", three: "0.169.0", js_base: "js/",
-  chat: {enabled: false}, custom: {r_max_kpc: 395, l_min_kpc: 20, l_max_kpc: 800}, fitter: {worker: "js/fitworker.js?v=20261123d", version: "fit/1"}
+  chat: {enabled: false}, custom: {r_max_kpc: 395, l_min_kpc: 20, l_max_kpc: 800}, fitter: {worker: "js/fitworker.js?v=20261123f", version: "fit/1"}
 }, window.TNG_DATA || {});
 const reg = makeRegistry(CFG), {ION} = reg;
 /* galaxy sample (js/galaxies.js): GIX is the picker index (null with one galaxy: no picker, nothing changes), GAL the
@@ -1063,7 +1063,16 @@ $("#v3d-mini").addEventListener("pointerenter", () => { if (thumbOk() && tier() 
 /* ---------------- galaxy sample: picker and switching (js/galaxies.js) ---------------- */
 const GPICK = GIX ? createGalaxyPicker({pop: $("#gxy-pop"), cur: $("#gxy-cur"), search: $("#gxy-search"), filter: $("#gxy-filter"), head: $("#gxy-head"),
   list: $("#gxy-list"), count: $("#gxy-count")}, {index: GIX, current: () => GAL, onPick: id => { closePops(); sfx("select"); switchGalaxy(id, {source: "picker"}); }}) : null;
-const LAST_BY_SIM = {rtml: "RTML_50pc", ism: "ISM_1kpc", tng50: GIX?.default ?? "RTML_50pc", fire2: "m12i"};
+const LAST_BY_SIM = {
+  rtml: "RTML_50pc",
+  cloudcrush: "CloudCrush_200pc",
+  starforge: "GMC_STARFORGE_20pc",
+  superbubble: "Superbubble_500pc",
+  shattering: "ShatteringMist_10pc",
+  ism: "ISM_1kpc",
+  tng50: GIX?.default ?? "RTML_50pc",
+  fire2: "m12i"
+};
 const activeSim = () => String((GIX && GIX.byId.get(GAL)?.sim) || CFG.galaxy?.sim || inferSim({id: GAL}));
 const activeSimKey = () => (GIX && GIX.byId.get(GAL)?.simKey) || inferSimKey({id: GAL, sim: CFG.galaxy?.sim});
 const activeIsFire = () => activeSimKey() === "fire2";
@@ -1074,8 +1083,12 @@ if (GIX && new Set(GIX.list.map(e => e.simKey)).size > 1 && $("#grp-gal") && !$(
   for (const e of GIX.list) simCounts[e.simKey] = (simCounts[e.simKey] || 0) + 1;
   const presentSims = SIM_ORDER.filter(sk => simCounts[sk] > 0);
   const SIM_SUB = {
-    rtml: "50 pc → 2517 AU KHI + cooling mixing layer (Athena++)",
-    ism: "1 kpc → 0.048 pc stratified multiphase ISM (TIGRESS)",
+    rtml: "50 pc → 157 AU KHI + cooling mixing layer (Athena++)",
+    cloudcrush: "200 pc → 630 AU radiative cloud crushing & cometary wake (Cholla)",
+    starforge: "20 pc → 62 AU magnetized GMC & blister H II bubble (STARFORGE)",
+    superbubble: "500 pc → 1570 AU clustered-SN X-ray superbubble breakout (TIGRESS)",
+    shattering: "10 pc → 31 AU isobaric thermal instability cloudlet mist (McCourt-Gronke)",
+    ism: "1 kpc → 3148 AU stratified multiphase ISM fountain (TIGRESS)",
     tng50: "AREPO moving mesh, z = 0",
     fire2: "GIZMO MFM zoom-in halos"
   };
@@ -1089,7 +1102,7 @@ if (GIX && new Set(GIX.list.map(e => e.simKey)).size > 1 && $("#grp-gal") && !$(
   topSimEl.setAttribute("aria-controls", "sim-pop");
   topSimEl.setAttribute("aria-expanded", "false");
   topSimEl.setAttribute("aria-label", "Simulation");
-  topSimEl.dataset.tip = "Switch simulation regime (50 pc RTML or 1 kpc ISM)";
+  topSimEl.dataset.tip = "Switch ISM & sub-ISM simulation regime (31 AU to 1 kpc)";
   topSimEl.innerHTML = `<span class="slab">${esc(defMeta.label)}</span><small class="scnt">${simCounts[defSk] || ""}</small><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg>`;
   const grpGal = $("#grp-gal"), gxyOpen = $("#gxy-open");
   if (gxyOpen) grpGal.insertBefore(topSimEl, gxyOpen); else grpGal.prepend(topSimEl);
@@ -1177,25 +1190,35 @@ function methodsText(sbi) {
   if (!("tau" in MEL)) { const n = ag.nextElementSibling; MEL.tau = n && !n.id && /Trident|Optical/.test(n.textContent) ? n : null;
     MEL.ions = $("#methods-ions"); MEL.atomic = $("#methods-atomic");
     MEL.lic = $("#lic-spectra"); MEL.lic2 = MEL.lic && MEL.lic.nextElementSibling;
-    MEL.simRtml = $("#lic-sim-rtml"); MEL.simIsm = $("#lic-sim-ism");
+    MEL.simRtml = $("#lic-sim-rtml"); MEL.simCrush = $("#lic-sim-cloudcrush"); MEL.simStarforge = $("#lic-sim-starforge");
+    MEL.simSbub = $("#lic-sim-superbubble"); MEL.simMist = $("#lic-sim-shattering"); MEL.simIsm = $("#lic-sim-ism");
     const pv = document.createElement("p"); pv.id = "methods-source"; pv.hidden = true; ag.after(pv); MEL.src = pv; }
   const sk = activeSimKey();
   const SIM_IONS = {
-    rtml: "RTML_50pc (50 pc → 2517 AU Radiative Turbulent Mixing Layer, Athena++): Kelvin-Helmholtz shear + radiative cooling fractal interface between cold dense clouds (T ~ 10²–10⁴ K) and hot wind/ambient gas (T ~ 10⁶ K). H I from self-shielded neutral fraction; 11 metal ions (Mg II through O VII) from Trident/CLOUDY photo+collisional ionization tables.",
-    ism: "ISM_1kpc (1 kpc → 0.048 pc Stratified Multiphase ISM & Superbubble Fountain, TIGRESS): supernova-driven multiphase interstellar medium with cold molecular/CNM cores, warm neutral/ionized layers (WNM/WIM), and hot superbubble chimneys. H I from self-shielded neutral fraction; 11 metal ions from Trident/CLOUDY tables."
+    rtml: "RTML_50pc (50 pc → 157 AU Radiative Turbulent Mixing Layer, Athena++): Kelvin-Helmholtz shear + radiative cooling fractal interface between cold dense gas (T ~ 10⁴ K) and hot coronal wind (T ~ 10⁶ K). H I from self-shielded neutral fraction; 11 metal ions (Mg II through O VII) from Trident/CLOUDY photo+collisional ionization tables.",
+    cloudcrush: "CloudCrush_200pc (200 pc → 630 AU Radiative Cloud Crushing & Cometary Wake, Gronke-Oh / Cholla): radiative cold cloud (R_cl = 10 pc, T = 10⁴ K, n_H = 1.5 cm⁻³) entrained and shattering in a supersonic hot galactic wind (T = 3×10⁶ K, v_wind = 350 km/s) with a 200 pc cometary cooling tail and Kelvin-Helmholtz mixing sheath.",
+    starforge: "GMC_STARFORGE_20pc (20 pc → 62 AU Magnetized GMC & Blister H II Bubble, STARFORGE / SILCC): supersonic turbulent molecular filament network (n_H ~ 10²–10⁴ cm⁻³) sculpted by an expanding blister H II photoionization front and OB stellar-wind feedback cavity, with 3D starlight and dust lanes (S0–S4).",
+    superbubble: "Superbubble_500pc (500 pc → 1570 AU Clustered-SN Superbubble Breakout, TIGRESS / PRFM): clustered-supernova superbubble carving a hot X-ray (T ~ 3×10⁶–10⁷ K, O VII / Ne VIII) chimney breakout through a stratified cold/warm H I disk with swept-up radiative shells and fragmented pillars.",
+    shattering: "ShatteringMist_10pc (10 pc → 31 AU Isobaric Thermal Instability Shattering Mist, McCourt-Gronke): cooling mist of thousands of coagulating r ~ c_s t_cool ~ 100–500 AU cold cloudlets (T = 10⁴ K, n_H = 3 cm⁻³) suspended in a transonic warm-hot 4×10⁵ K medium, resolving the fundamental cooling length at 31 AU.",
+    ism: "ISM_1kpc (1 kpc → 3148 AU Stratified Multiphase ISM & Superbubble Fountain, TIGRESS): supernova-driven multiphase interstellar medium with cold molecular/CNM cores, warm neutral/ionized layers (WNM/WIM), and hot superbubble chimneys. H I from self-shielded neutral fraction; 11 metal ions from Trident/CLOUDY tables."
   };
-  for (const [el, on] of [[MEL.lic, !sbi], [MEL.simRtml, sk === "rtml"], [MEL.simIsm, sk === "ism"]]) { if (!el) continue; let t = el.querySelector(".cur-l");
+  for (const [el, on] of [[MEL.lic, !sbi], [MEL.simRtml, sk === "rtml"], [MEL.simCrush, sk === "cloudcrush"], [MEL.simStarforge, sk === "starforge"], [MEL.simSbub, sk === "superbubble"], [MEL.simMist, sk === "shattering"], [MEL.simIsm, sk === "ism"]]) { if (!el) continue; let t = el.querySelector(".cur-l");
     if (on && !t) { t = document.createElement("strong"); t.className = "cur-l"; t.textContent = "This volume: "; el.prepend(t); } else if (!on && t) t.remove(); }
   for (const k of ["tau", "ions", "atomic"]) { const el = MEL[k]; if (!el) continue; if (!(k in MTX)) MTX[k] = el.innerHTML;
     if (k === "ions" && SIM_IONS[sk]) el.textContent = SIM_IONS[sk]; else el.innerHTML = MTX[k]; }
   MEL.src.hidden = !sbi; MEL.src.textContent = sbi ? (SRC.text || "") : "";
 }
 function aboutText() {
-  const g = CFG.galaxy || {}, gid = g.subhalo_id ?? GAL;
-  const isIsmVol = String(gid) === "ISM_1kpc" || activeSimKey() === "ism";
-  $("#about-gal").textContent = isIsmVol
-    ? "Sightlines through the 1 kpc → 0.048 pc Stratified Multiphase Interstellar Medium & Superbubble Fountain volume (Volume ISM_1kpc, TIGRESS-ISM, 5-level octree down to 0.048 pc / 10,068 AU cells), labelled by geometry (Normal (+z) across the stratified midplane, In-plane (xy) along the ISM midplane, or Oblique 3D), impact parameter b and azimuth Φ."
-    : "Sightlines through the 50 pc → 2517 AU Radiative Turbulent Mixing Layer volume (Volume RTML_50pc, RTML-Athena++, 5-level octree down to 0.0122 pc / 2517 AU cells), labelled by geometry (Normal (+z) across the KHI cooling interface, In-plane (xy) along the shear layer, or Oblique 3D), impact parameter b and azimuth Φ.";
+  const sk = activeSimKey();
+  const ABOUT_BY_SIM = {
+    rtml: "Sightlines through the 50 pc → 157 AU Radiative Turbulent Mixing Layer volume (Volume RTML_50pc, RTML-Athena++, 5-level L0–L4 & S0–S4 octree from 0.195 pc down to 0.00076 pc = 157 AU voxels), labelled by geometry (Normal (+z) across the KHI cooling interface, In-plane (xy) along the shear layer, or Oblique 3D), impact parameter b and azimuth Φ.",
+    cloudcrush: "Sightlines through the 200 pc → 630 AU Radiative Cloud Crushing & Cometary Tail volume (Volume CloudCrush_200pc, Gronke-Oh / Cholla Cloud Crushing, 5-level L0–L4 & S0–S4 octree from 0.78 pc down to 630 AU voxels), probing shattered cold core droplets, cometary wake intermediate ions, and turbulent shear-layer hot ions.",
+    starforge: "Sightlines through the 20 pc → 62 AU Magnetized GMC & Blister H II Bubble volume (Volume GMC_STARFORGE_20pc, STARFORGE / SILCC GMC & H II Bubble, 5-level L0–L4 & S0–S4 octree from 0.078 pc down to 62 AU voxels), probing dense cold molecular filaments, photoionized blister H II walls, and wind-blown shock interfaces.",
+    superbubble: "Sightlines through the 500 pc → 1570 AU Clustered-SN Superbubble Breakout volume (Volume Superbubble_500pc, TIGRESS / PRFM Clustered-SN Superbubble, 5-level L0–L4 & S0–S4 octree from 1.95 pc down to 1570 AU voxels), probing hot X-ray chimney interiors (O VII, Ne VIII), conductive shell walls (O VI, N V, C IV), and swept-up cold shell fragments.",
+    shattering: "Sightlines through the 10 pc → 31 AU Isobaric Thermal Instability Shattering Mist volume (Volume ShatteringMist_10pc, McCourt-Gronke Thermal Instability Mist, 5-level L0–L4 & S0–S4 octree from 0.039 pc down to 31 AU voxels resolving c_s t_cool), probing multi-component mist absorption honeycombs intersecting 5–15 distinct cold cloudlets.",
+    ism: "Sightlines through the 1 kpc → 3148 AU Stratified Multiphase Interstellar Medium & Superbubble Fountain volume (Volume ISM_1kpc, TIGRESS-ISM, 5-level L0–L4 & S0–S4 octree from 3.91 pc down to 0.0153 pc = 3148 AU voxels), labelled by geometry (Normal (+z) across the stratified midplane, In-plane (xy) along the ISM midplane, or Oblique 3D), impact parameter b and azimuth Φ."
+  };
+  $("#about-gal").textContent = ABOUT_BY_SIM[sk] || ABOUT_BY_SIM.rtml;
 }
 /* the 3D engine is per galaxy (its cubes, frame and lines): dispose it and remount on demand (the tab, or the thumbnail
    where it was live). viewer.dispose() also removes its control column with the #picker-root it adopted: put one back */

@@ -1,6 +1,6 @@
 // Phase-3 UI contract, static part (design 6.1, 6.2, 6.3, 6.4, 6.6; brief C1-C14 where checkable without a browser;
 // pick.md). Merged 2026-10-14 from the tests-unit version and the page agent's version (state.js unit checks kept).
-// Usage: node tests/js/ui_static.mjs [docs/tng50 dir] [--page FILE] [--js DIR] [--css DIR]
+// Usage: node tests/js/ui_static.mjs [docs/ism dir] [--page FILE] [--js DIR] [--css DIR]
 //            [TNG_BROWSER=1: --serve FILE --viz DIR --port N --profile DIR --inject shim.js --edge BIN]
 // Node part (always): reads the page template (default <dir>/_template.html), <dir>/js/*.js and <dir>/css/*.css with
 // comments stripped, and checks
@@ -25,7 +25,7 @@ import {ROOT, parseArgs, checker, sepHits, listFiles, loadRegistry, serve, launc
 import {jsStrings, htmlParts} from "./lib/jsscan.mjs";
 
 const {pos, opt} = parseArgs(process.argv.slice(2));
-const DIR = resolve(pos[0] || join(ROOT, "docs/tng50"));
+const DIR = resolve(pos[0] || join(ROOT, "docs/ism"));
 const PAGE = resolve(opt.page || (existsSync(join(DIR, "_template.html")) ? join(DIR, "_template.html") : join(DIR, "index.html")));   // an export dir has only index.html
 const JS = listFiles(resolve(opt.js || join(DIR, "js")), /\.m?js$/), CSS = listFiles(resolve(opt.css || join(DIR, "css")), /\.css$/);
 const C = checker(), check = C.check;
@@ -78,16 +78,16 @@ const declaredId = id => new RegExp(`\\bid=["']${esc(id)}["']`).test(htmlText) ?
 { const re = /interactive\s+companion/i, where = [...(re.test(htmlText) ? [basename(PAGE)] : []), ...allStr.filter(x => re.test(x.s)).map(x => `${x.f}:${x.line}`)];
   check(!where.length, `C11 no "Interactive companion" text${where.length ? ": " + where.join(", ") : ""}`); }
 { const m = htmlText.match(/<h1\b[^>]*\bid="title"[^>]*>([\s\S]*?)<\/h1>/), t = m ? m[1].replace(/<[^>]+>/g, " ").replace(/&\w+;/g, " ").replace(/\s+/g, " ").trim() : null;
-  check(t === "TNG50 sightlines" && /data-testid="title"/.test(m[0]), `C11 h1#title reads "TNG50 sightlines" (3 words max) with data-testid title: ${JSON.stringify(t)}`); }
+  check((t === "TNG50 sightlines" || t === "ISM Mixing Layers") && /data-testid="title"/.test(m[0]), `C11 h1#title reads "ISM Mixing Layers" or "TNG50 sightlines" (3 words max) with data-testid title: ${JSON.stringify(t)}`); }
 { const ins = [...htmlText.matchAll(/<input\b[^>]*\bname=["']layout["'][^>]*>/g)].map(m => m[0]), vals = ins.map(s => (s.match(/\bvalue=["']([^"']+)["']/) || [])[1]);
   check(JSON.stringify([...vals].sort()) === JSON.stringify(["1", "2R", "2SN", "4"]) && ins.every(s => /data-testid="layout-/.test(s)), `C8 layout radios input[name=layout] are 1, 2R, 2SN, 4 with test ids (found ${vals.join(", ") || "none"})`); }
 check(/#v3d-stage\b[^{]*\{[^}]*aspect-ratio\s*:\s*1\s*(\/\s*1\s*)?[;}]/.test(cssText), "C13 #v3d-stage CSS sets aspect-ratio 1 / 1");
 { /* galaxy sample: the picker group is hidden by default (the page shows it only with CFG.galaxies), its popover is a dialog
      with a search box, a sort header and a listbox; read from the template so a page exported before it still passes */
-  const T = readFileSync(join(ROOT, "docs", "tng50", "_template.html"), "utf8"), G = readFileSync(join(ROOT, "docs", "tng50", "js", "galaxies.js"), "utf8");
+  const T = readFileSync(join(DIR, "_template.html"), "utf8"), G = readFileSync(join(DIR, "js", "galaxies.js"), "utf8");
   check(/<div class="grp" id="grp-gal"[^>]*\bhidden\b/.test(T) && /id="gxy-open"[^>]*aria-controls="gxy-pop"/.test(T) && /<div class="pop" id="gxy-pop" role="dialog"/.test(T)
     && /<input\b(?=[^>]*\bid="gxy-search")(?=[^>]*\btype="search")/.test(T) && /id="gxy-head"/.test(T) && /<ul id="gxy-list" role="listbox"/.test(T)
-    && /export function createGalaxyPicker/.test(G) && /galaxy picker \(galaxy-sample web contract; js\/galaxies\.js\) BEGIN/.test(readFileSync(join(ROOT, "docs", "tng50", "css", "page.css"), "utf8")) && /#gxy-pop\{/.test(cssText),
+    && /export function createGalaxyPicker/.test(G) && /galaxy picker \(galaxy-sample web contract; js\/galaxies\.js\) BEGIN/.test(readFileSync(join(DIR, "css", "page.css"), "utf8")) && /#gxy-pop\{/.test(cssText),
   "galaxy picker: #grp-gal hidden by default, #gxy-pop dialog with search, sort header and listbox, CSS block present"); }
 check(!/<select\b[^>]*\bid=["']gallery["']/.test(htmlText) && /\bid="gal-pop"/.test(htmlText) && /<input\b(?=[^>]*\bid="gal-search")(?=[^>]*\btype="search")[^>]*>/.test(htmlText),
   'C6 gallery is a popover (#gal-pop with input#gal-search type search), no <select id="gallery">');
@@ -121,13 +121,14 @@ check(!/<select\b[^>]*\bid=["']gallery["']/.test(htmlText) && /\bid="gal-pop"/.t
     check(/\.v3tf[^{]*\{[^}]*var\(--mat-/.test(cssText), "3D TF card styled with the glass tokens (--mat-*)"); } }
 if (basename(PAGE) === "_template.html") {   // the exporter contract (scripts/export_tng50_web.py replaces the marker)
   check(html.split("/*__DATA__*/null").length === 2 && /const DATA = \/\*__DATA__\*\/null;\n/.test(html), "exactly one config marker, in the form the exporter test parses");
-  check(/<script type="module" src="js\/app\.js"><\/script>/.test(html) && /href="css\/page\.css"/.test(html), "the template loads js/app.js and css/page.css");
+  check(/<script type="module" src="js\/app\.js(?:\?v=[\w.-]+)?"><\/script>/.test(html) && /href="css\/page\.css(?:\?v=[\w.-]+)?"/.test(html), "the template loads js/app.js and css/page.css");
 }
 /* perf R5: every module js/app.js imports statically (transitively) is modulepreloaded, nothing else, and after the import map */
-{ const want = new Set(), q = ["app.js"];
-  while (q.length) { const f = q.shift(); if (want.has(f)) continue; want.add(f); const x = srcs.find(s => basename(s.f) === f);
-    if (x) for (const m of x.src.matchAll(/^\s*import\s[^;]*?from\s+"\.\/([^"]+)"/gms)) q.push(m[1]); }
-  const pre = [...html.matchAll(/<link rel="modulepreload" href="js\/([^"]+)">/g)].map(m => m[1]);
+{ const stripQ = s => String(s).split("?")[0];
+  const want = new Set(), q = ["app.js"];
+  while (q.length) { const f = stripQ(q.shift()); if (want.has(f)) continue; want.add(f); const x = srcs.find(s => basename(s.f) === f);
+    if (x) for (const m of x.src.matchAll(/^\s*import\s[^;]*?from\s+"\.\/([^"]+)"/gms)) q.push(stripQ(m[1])); }
+  const pre = [...html.matchAll(/<link rel="modulepreload" href="js\/([^"]+)">/g)].map(m => stripQ(m[1]));
   const miss = [...want].filter(f => !pre.includes(f)), extra = pre.filter(f => !want.has(f));
   check(!miss.length && !extra.length, `modulepreload = app.js's static import graph (${want.size} modules)${miss.length ? "; missing " + miss.join(", ") : ""}${extra.length ? "; extra " + extra.join(", ") : ""}`);
   check(!pre.length || html.indexOf('<link rel="modulepreload"') > html.indexOf('<script type="importmap">'), "modulepreload links come after the import map");
@@ -147,7 +148,7 @@ export const tipWords = s => String(s).replace(/\$\{[^}]*\}/g, "X").split(/\s+/)
   const tipsMod = srcs.find(x => basename(x.f) === "tips.js");
   check(!!tipsMod && /export function initTips/.test(tipsMod.src) && /export function placeTip/.test(tipsMod.src) && /export function createLongPress/.test(tipsMod.src),
     "tips: js/tips.js exports initTips, placeTip and createLongPress");
-  check(raw.some(x => x.f === "app.js" && /import \{[^}]*\binitTips\b[^}]*\} from "\.\/tips\.js"/.test(x.src) && /\binitTips\(\)/.test(x.src)), "tips: app.js imports and calls initTips()");
+  check(raw.some(x => x.f === "app.js" && /import \{[^}]*\binitTips\b[^}]*\} from "\.\/tips\.js(?:\?v=[\w.-]+)?"/.test(x.src) && /\binitTips\(\)/.test(x.src)), "tips: app.js imports and calls initTips()");
   check(/(^|\})\s*\.tip\s*\{[^}]*var\(--mat-thick\)[^}]*var\(--mat-blur-thick\)/m.test(cssText) && /\.tip\s*\{[^}]*pointer-events\s*:\s*none/.test(cssText), "tips: .tip styled with the glass tokens (--mat-thick, --mat-blur-thick), pointer-events none");
   /* the opening tag (template or a JS template string) or the h()/el() attribute object that declares an id */
   const declOf = id => { const out = [], e = esc(id);
@@ -168,7 +169,7 @@ export const tipWords = s => String(s).replace(/\$\{[^}]*\}/g, "X").split(/\s+/)
     "Lines menu rows and chips (app.js)": /data-testid="ion-\$\{i\.key\}" data-tip=/.test(src("app.js")) && /class="chip"[^>]*data-tip=/.test(src("app.js")),
     "3D field buttons (viewer3d.js radio)": /name="\$\{name\}"[^>]*data-tip="\$\{escH\(fieldTip\(x\)\)\}"/.test(src("viewer3d.js")),
     "3D mode radios": ["integral", "volume"].every(v => new RegExp(`<input type="radio" name="v3-mode" value="${v}"[^>]*data-tip=`).test(src("viewer3d.js"))),
-    "3D head control button (viewer3d.js), lazy headctl.js": /id="v3-head"[^>]*data-tip="/.test(src("viewer3d.js")) && /import\("\.\/headctl\.js"\)/.test(src("viewer3d.js")) && !/^\s*import\b[^(]*headctl/m.test(src("viewer3d.js")),
+    "3D head control button (viewer3d.js), lazy headctl.js": /id="v3-head"[^>]*data-tip="/.test(src("viewer3d.js")) && /import\("\.\/headctl\.js(?:\?v=[\w.-]+)?"\)/.test(src("viewer3d.js")) && !/^\s*import\b[^(]*headctl/m.test(src("viewer3d.js")),
     "3D view buttons (4)": ["face-on", "edge-on", "sightline", "reset"].every(p => new RegExp(`data-p="${p}" data-tip="`).test(src("viewer3d.js"))),
     "Pick ray endpoint inputs (picker.js inp)": /const inp = \(id, lab\)[\s\S]{0,400}"data-tip":/.test(src("picker.js")),
     "Ask New, Send and Close buttons (chat.js)": /send = el\("button", \{[^}]*"data-tip"/.test(src("chat.js"))

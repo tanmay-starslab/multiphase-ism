@@ -1,11 +1,11 @@
-// Unit tests of docs/tng50/js/fit.js fitPanel on synthetic absorbers with known (logN, b, v): recovery, pruning,
+// Unit tests of docs/ism/js/fit.js fitPanel on synthetic absorbers with known (logN, b, v): recovery, pruning,
 // flags, budget, statuses, determinism and module purity (design-3 sections 5.1 to 5.4).
 import {readFileSync} from "node:fs";
 import {join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
-import {fitPanel, degradeV, faddeeva, cacheKey, rowsToComps, fitQuality, LOOSE_DEX, FIT_VERSION, FLAGS} from "../../docs/tng50/js/fit.js";
+import {fitPanel, degradeV, faddeeva, cacheKey, rowsToComps, fitQuality, LOOSE_DEX, FIT_VERSION, FLAGS} from "../../docs/ism/js/fit.js";
 
-const HERE = dirname(fileURLToPath(import.meta.url)), SRC = join(HERE, "..", "..", "docs", "tng50", "js", "fit.js");
+const HERE = dirname(fileURLToPath(import.meta.url)), SRC = join(HERE, "..", "..", "docs", "ism", "js", "fit.js");
 const fx = JSON.parse(readFileSync(join(HERE, "fixtures", "fit_cases.json"), "utf8"));
 const CK = ["v", "dv", "logN", "dlogN", "b", "db", "region", "flag", "EW"];
 let fails = 0;

@@ -1,5 +1,5 @@
-// levelForView (docs/tng50/js/vizdata.js, design §5.4, §5.11 item 3): desktop/mobile × hVis 20/60/200 × deviceMemory 2/8.
-import {levelForView, viewPlan} from "../../docs/tng50/js/vizdata.js";
+// levelForView (docs/ism/js/vizdata.js, design §5.4, §5.11 item 3): desktop/mobile × hVis 20/60/200 × deviceMemory 2/8.
+import {levelForView, viewPlan} from "../../docs/ism/js/vizdata.js";
 let fails = 0; const check = (ok, msg) => { console.log(`${ok ? "ok  " : "FAIL"} ${msg}`); if (!ok) fails++; };
 const T = [   // mobile, hVis, deviceMemory -> gas, stars, parallel
   [false, 20, 8, "L1,L0,L2", "S1,S2", true], [false, 60, 8, "L1,L0,L2", "S1,S2", true], [false, 200, 8, "L1,L0,L2", "S1,S2,S0", true],

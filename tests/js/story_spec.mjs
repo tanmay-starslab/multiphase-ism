@@ -16,18 +16,18 @@
 import {readFileSync, existsSync} from "node:fs";
 import {join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
-import {decodeTNGS, fitPanel, PIX_PER_RESEL} from "../../docs/tng50/js/fit.js";
-import * as K from "../../docs/tng50/learn/how-a-spectrum-is-made/js/plot.js";
-import {geometryOf, weight, tauSumFromData, ionInputs, gridOf, tauSumFromBuffers} from "../../docs/tng50/learn/how-a-spectrum-is-made/js/spectrum/tausum.js";
-import {handle as workerHandle} from "../../docs/tng50/learn/how-a-spectrum-is-made/js/spectrum/tauworker.js";
-import {createSpectrum, frameModel, dockLayout, dockRects, tauSet, measurer, GHOST_VW, MIN_DIAL, MIN_TOGGLE_DIAL} from "../../docs/tng50/learn/how-a-spectrum-is-made/js/spectrum/dock.js";
-import {connector, tethers, corridors, LANDING_U, CASES_U} from "../../docs/tng50/learn/how-a-spectrum-is-made/js/spectrum/link.js";
-import {toSlider, fromSlider, DIALS, visibleFor, TOGGLE_W} from "../../docs/tng50/learn/how-a-spectrum-is-made/js/spectrum/dials.js";
-import {FIT_PHASES} from "../../docs/tng50/learn/how-a-spectrum-is-made/js/scenes/fit.js";
-import {makeSeek} from "../../docs/tng50/learn/how-a-spectrum-is-made/js/core/seek.js";
-import {layoutClass, computeBands} from "../../docs/tng50/learn/how-a-spectrum-is-made/js/ui/layoutclass.js";
+import {decodeTNGS, fitPanel, PIX_PER_RESEL} from "../../docs/ism/js/fit.js";
+import * as K from "../../docs/ism/learn/how-a-spectrum-is-made/js/plot.js";
+import {geometryOf, weight, tauSumFromData, ionInputs, gridOf, tauSumFromBuffers} from "../../docs/ism/learn/how-a-spectrum-is-made/js/spectrum/tausum.js";
+import {handle as workerHandle} from "../../docs/ism/learn/how-a-spectrum-is-made/js/spectrum/tauworker.js";
+import {createSpectrum, frameModel, dockLayout, dockRects, tauSet, measurer, GHOST_VW, MIN_DIAL, MIN_TOGGLE_DIAL} from "../../docs/ism/learn/how-a-spectrum-is-made/js/spectrum/dock.js";
+import {connector, tethers, corridors, LANDING_U, CASES_U} from "../../docs/ism/learn/how-a-spectrum-is-made/js/spectrum/link.js";
+import {toSlider, fromSlider, DIALS, visibleFor, TOGGLE_W} from "../../docs/ism/learn/how-a-spectrum-is-made/js/spectrum/dials.js";
+import {FIT_PHASES} from "../../docs/ism/learn/how-a-spectrum-is-made/js/scenes/fit.js";
+import {makeSeek} from "../../docs/ism/learn/how-a-spectrum-is-made/js/core/seek.js";
+import {layoutClass, computeBands} from "../../docs/ism/learn/how-a-spectrum-is-made/js/ui/layoutclass.js";
 
-const HERE = dirname(fileURLToPath(import.meta.url)), REPO = join(HERE, "..", ".."), TNG = join(REPO, "docs", "tng50");
+const HERE = dirname(fileURLToPath(import.meta.url)), REPO = join(HERE, "..", ".."), TNG = join(REPO, "docs", "ism");
 const ROOT = join(TNG, "learn", "how-a-spectrum-is-made"), DATA = join(ROOT, "data");
 let pass = 0, fail = 0;
 const check = (ok, msg) => { if (ok) pass++; else fail++; console.log(`${ok ? "ok  " : "FAIL"} ${msg}`); };
@@ -126,7 +126,7 @@ const frames = P160.map(p => seek(p, data, {}));
   check(q95 <= 1 && qmax < 50, `per-frame cost in the hero sweeps (${ht.length} Watch-speed frames from cold memos): p50 ${q50.toFixed(3)} ms, p95 ${q95.toFixed(3)} ms ≤ 1 ms, max ${qmax.toFixed(1)} ms < 50 ms`);
 }
 { // the cached-draw noise path gives the explorer's own pixels, bit for bit
-  const {observedSN} = await import("../../docs/tng50/learn/how-a-spectrum-is-made/js/scenes/noise.js");
+  const {observedSN} = await import("../../docs/ism/learn/how-a-spectrum-is-made/js/scenes/noise.js");
   let same = true;
   for (const k of ["OVI", "HI"]) for (const sn of [2, 3.7, 10, 55]) for (const seed of [0, 1]) {
     const ns = K.caseSeed(seed, k, 0), a = K.observed(data, k, 30000, sn, ns), b = observedSN(data, k, 30000, sn, ns);
@@ -252,7 +252,7 @@ const inside = (r, c, e = 0.5) => r.x >= c.x - e && r.y >= c.y - e && r.x + r.w 
   const direct = fitPanel(req);
   const posted = [];
   globalThis.self = {postMessage: m => posted.push(m)};
-  await import("../../docs/tng50/js/fitworker.js");
+  await import("../../docs/ism/js/fitworker.js");
   self.onmessage({data: {type: "story-fit", reqId: "s1", req}});
   for (let k = 0; k < 400 && !posted.length; k++) await new Promise(r => setTimeout(r, 25));
   const r = posted[0];
@@ -284,9 +284,9 @@ const inside = (r, c, e = 0.5) => r.x >= c.x - e && r.y >= c.y - e && r.x + r.w 
 
 /* ---------------- phase 1 (S0 frozen): idle warm-up of the B12a blur memo; the dock's GL scrim rect ---------------- */
 {
-  const L = await import("../../docs/tng50/learn/how-a-spectrum-is-made/js/scenes/lsf.js");
-  const {degradeV} = await import("../../docs/tng50/js/fit.js");
-  const D = await import("../../docs/tng50/learn/how-a-spectrum-is-made/js/spectrum/dock.js");
+  const L = await import("../../docs/ism/learn/how-a-spectrum-is-made/js/scenes/lsf.js");
+  const {degradeV} = await import("../../docs/ism/js/fit.js");
+  const D = await import("../../docs/ism/learn/how-a-spectrum-is-made/js/spectrum/dock.js");
   let cover = true; for (let i = 0; i <= 2000; i++) { const R = 5000 * 30 ** (i / 2000); if (!L.SWEEP_R.includes(L.quantR(R))) cover = false; }
   const d2 = JSON.parse(JSON.stringify(data)); d2.lines = data.lines;          // fresh memo (RMEMO is keyed by the data object)
   let slices = 0; while (!L.warmObservedR(d2, ["OVI", "HI"], 4, () => performance.now()) && slices < 1000) slices++;

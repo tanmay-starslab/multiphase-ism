@@ -21,7 +21,7 @@ import {ROOT as REPO, parseArgs, checker, launch, BLOCK, sleep} from "./lib/brow
 
 const {opt} = parseArgs(process.argv.slice(2));
 const C = checker(), check = C.check, note = C.note;
-const BUILD = join(REPO, "scripts/build_site.mjs"), STORY = "learn/how-a-spectrum-is-made", SROOT = join(REPO, "docs/tng50", STORY);
+const BUILD = join(REPO, "scripts/build_site.mjs"), STORY = "learn/how-a-spectrum-is-made", SROOT = join(REPO, "docs/ism", STORY);
 const CASE_IDS = ["clean", "multiphase", "damped", "empty", "hot"];
 const TMP = mkdtempSync(join(process.env.TMPDIR || tmpdir(), "r6b-site-"));
 const IX = JSON.parse(readFileSync(join(SROOT, "data/index.json"), "utf8"));
@@ -69,10 +69,10 @@ if (IX.picker === "cases") note("shipped index has picker \"cases\": its listed 
 /* perf R5 dist transforms: gzipped sightline bins that inflate to the repository's bytes, per-sightline component slices
    announced as components_dir, and cache rules where no path gets two Cache-Control headers */
 if (!ship.err) {
-  const sd = join(REPO, "docs/tng50/data/s"), bins = existsSync(sd) ? readdirSync(sd).filter(f => f.endsWith(".bin")).slice(0, 3) : [];
+  const sd = join(REPO, "docs/ism/data/s"), bins = existsSync(sd) ? readdirSync(sd).filter(f => f.endsWith(".bin")).slice(0, 3) : [];
   for (const f of bins) { const b = readFileSync(join(ship.out, "data/s", f));
     check(b[0] === 0x1f && b[1] === 0x8b && gunzipSync(b).equals(readFileSync(join(sd, f))), `dist data/s/${f} is gzip of the repository file (${b.length} B)`); }
-  const comp = join(REPO, "docs/tng50/data/components.json");
+  const comp = join(REPO, "docs/ism/data/components.json");
   if (existsSync(comp)) { const full = JSON.parse(readFileSync(comp, "utf8")), id = Object.keys(full.entries)[0];
     const one = JSON.parse(readFileSync(join(ship.out, "data/c", id + ".json"), "utf8"));
     check(JSON.stringify(one.entries[id]) === JSON.stringify(full.entries[id]) && one.params_tag === full.params_tag && JSON.stringify(one.params) === JSON.stringify(full.params) && Object.keys(one.entries).length === 1,

@@ -6,22 +6,36 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;",
 const ID_OK = /^(?:\d{1,9}|[A-Za-z][A-Za-z0-9_]{1,23})$/;
 export const normId = x => (/^\d{1,9}$/.test(String(x ?? "")) ? +x : String(x ?? ""));
 export const isRtml = e => !!(e && (/^rtml/i.test(String(e.sim || e.simKey || "")) || /^rtml/i.test(String(e.id ?? ""))));
-export const isIsm = e => !!(e && (/^tigress|^ism/i.test(String(e.sim || e.simKey || "")) || /^ism_/i.test(String(e.id ?? ""))));
+export const isCloudCrush = e => !!(e && (/crush|cholla/i.test(String(e.sim || e.simKey || "")) || /^cloudcrush/i.test(String(e.id ?? ""))));
+export const isStarforge = e => !!(e && (/starforge|gmc/i.test(String(e.sim || e.simKey || "")) || /^gmc_/i.test(String(e.id ?? ""))));
+export const isSuperbubble = e => !!(e && (/superbubble|prfm/i.test(String(e.sim || e.simKey || "")) || /^superbubble/i.test(String(e.id ?? ""))));
+export const isShattering = e => !!(e && (/shatter|mist|mccourt/i.test(String(e.sim || e.simKey || "")) || /^shattering/i.test(String(e.id ?? ""))));
+export const isIsm = e => !!(e && (/^tigress-ism|^ism$/i.test(String(e.sim || e.simKey || "")) || /^ism_/i.test(String(e.id ?? ""))));
 export const isFire = e => !!(e && (/^fire/i.test(String(e.sim || e.simKey || "")) || /^m\d|^Romeo|^Juliet|^Romulus|^Remus|^Thelma|^Louise/i.test(String(e.id ?? ""))));
 
 export function inferSim(e) {
   if (e && e.sim) return String(e.sim);
   const id = String(e?.id ?? e ?? "");
   if (/^rtml/i.test(id)) return "RTML-Athena++";
+  if (/^cloudcrush/i.test(id)) return "Gronke-Oh / Cholla Cloud Crushing";
+  if (/^gmc_starforge|^starforge/i.test(id)) return "STARFORGE / SILCC GMC & H II Bubble";
+  if (/^superbubble/i.test(id)) return "TIGRESS / PRFM Clustered-SN Superbubble";
+  if (/^shattering/i.test(id)) return "McCourt-Gronke Thermal Instability Mist";
   if (/^ism_|^tigress/i.test(id)) return "TIGRESS-ISM";
   if (/^m\d|^Romeo|^Juliet|^Romulus|^Remus|^Thelma|^Louise/i.test(id)) return "FIRE-2";
   return "TNG50-1";
 }
 
+const ALL_ISM_KEYS = ["rtml", "cloudcrush", "starforge", "superbubble", "shattering", "ism"];
+
 export function inferSimKey(e) {
-  if (e && e.simKey && ["rtml", "ism", "tng50", "fire2"].includes(e.simKey)) return e.simKey;
+  if (e && e.simKey && [...ALL_ISM_KEYS, "tng50", "fire2"].includes(e.simKey)) return e.simKey;
   const s = inferSim(e).toLowerCase(), id = String(e?.id ?? e ?? "").toLowerCase();
   if (s.startsWith("rtml") || id.startsWith("rtml") || isRtml(e)) return "rtml";
+  if (s.includes("crush") || s.includes("cholla") || id.startsWith("cloudcrush") || isCloudCrush(e)) return "cloudcrush";
+  if (s.includes("starforge") || s.includes("gmc") || id.startsWith("gmc_") || isStarforge(e)) return "starforge";
+  if (s.includes("superbubble") || s.includes("prfm") || id.startsWith("superbubble") || isSuperbubble(e)) return "superbubble";
+  if (s.includes("shatter") || s.includes("mist") || s.includes("mccourt") || id.startsWith("shattering") || isShattering(e)) return "shattering";
   if (s.startsWith("tigress") || s.startsWith("ism") || id.startsWith("ism_") || isIsm(e)) return "ism";
   if (s.startsWith("fire") || isFire(e)) return "fire2";
   return "tng50";
@@ -32,24 +46,72 @@ export const SIM_META = {
     label: "50 pc RTML",
     shortLabel: "50 pc RTML",
     title: "ISM & Mixing Layers",
-    groupTitle: "Radiative Turbulent Mixing Layer (50 pc → 2517 AU, Athena++)",
-    msg: "50 pc → 2517 AU Radiative Turbulent Mixing Layer (Athena++ KHI + radiative cooling)",
+    groupTitle: "Radiative Turbulent Mixing Layer (50 pc → 157 AU, Athena++)",
+    msg: "50 pc → 157 AU Radiative Turbulent Mixing Layer (Athena++ KHI + radiative cooling)",
     tip: "Show 50 pc Radiative Turbulent Mixing Layer (RTML_50pc)",
-    topTip: "Switch to 50 pc → 2517 AU Radiative Turbulent Mixing Layer (RTML_50pc)",
+    topTip: "Switch to 50 pc → 157 AU Radiative Turbulent Mixing Layer (RTML_50pc)",
     tag: "RTML 50pc",
-    tagTip: "50 pc → 2517 AU Radiative Turbulent Mixing Layer (Athena++)",
+    tagTip: "50 pc → 157 AU Radiative Turbulent Mixing Layer (Athena++)",
     credit: "Simulation: 50 pc Radiative Turbulent Mixing Layer (Athena++ RTML)"
+  },
+  cloudcrush: {
+    label: "200 pc Cloud Crush",
+    shortLabel: "200 pc Cloud Crush",
+    title: "ISM & Mixing Layers",
+    groupTitle: "Radiative Cloud Crushing & Cometary Tail (200 pc → 630 AU, Gronke-Oh / Cholla)",
+    msg: "200 pc → 630 AU Radiative Cloud Crushing & Cometary Tail (Gronke-Oh / Cholla)",
+    tip: "Show 200 pc Radiative Cloud Crushing volume (CloudCrush_200pc)",
+    topTip: "Switch to 200 pc → 630 AU Cloud Crush cometary wake (CloudCrush_200pc)",
+    tag: "CloudCrush 200pc",
+    tagTip: "200 pc → 630 AU Radiative Cloud Crushing in a hot wind",
+    credit: "Simulation: 200 pc Radiative Cloud Crushing (Gronke-Oh / Cholla)"
+  },
+  starforge: {
+    label: "20 pc STARFORGE GMC",
+    shortLabel: "20 pc STARFORGE GMC",
+    title: "ISM & Mixing Layers",
+    groupTitle: "Magnetized GMC & Blister H II Bubble (20 pc → 62 AU, STARFORGE / SILCC)",
+    msg: "20 pc → 62 AU Magnetized GMC & Blister H II Bubble (STARFORGE / SILCC)",
+    tip: "Show 20 pc STARFORGE GMC and H II blister volume",
+    topTip: "Switch to 20 pc → 62 AU STARFORGE GMC and H II bubble",
+    tag: "STARFORGE 20pc",
+    tagTip: "20 pc → 62 AU Magnetized GMC and blister H II bubble",
+    credit: "Simulation: 20 pc Magnetized GMC & H II Bubble (STARFORGE / SILCC)"
+  },
+  superbubble: {
+    label: "500 pc Superbubble",
+    shortLabel: "500 pc Superbubble",
+    title: "ISM & Mixing Layers",
+    groupTitle: "Clustered-SN Superbubble Breakout (500 pc → 1570 AU, TIGRESS / PRFM)",
+    msg: "500 pc → 1570 AU Clustered-SN X-ray Superbubble Breakout (TIGRESS / PRFM)",
+    tip: "Show 500 pc Clustered-SN X-ray Superbubble breakout volume",
+    topTip: "Switch to 500 pc → 1570 AU Clustered-SN Superbubble chimney breakout",
+    tag: "Superbubble 500pc",
+    tagTip: "500 pc → 1570 AU Clustered-SN X-ray Superbubble chimney breakout",
+    credit: "Simulation: 500 pc Clustered-SN Superbubble Breakout (TIGRESS / PRFM)"
+  },
+  shattering: {
+    label: "10 pc Shattering Mist",
+    shortLabel: "10 pc Shattering Mist",
+    title: "ISM & Mixing Layers",
+    groupTitle: "Isobaric Thermal Instability Shattering Mist (10 pc → 31 AU, McCourt-Gronke)",
+    msg: "10 pc → 31 AU Isobaric Thermal Instability Shattering Mist (McCourt-Gronke c_s t_cool)",
+    tip: "Show 10 pc Isobaric Thermal Instability Shattering Mist volume",
+    topTip: "Switch to 10 pc → 31 AU McCourt-Gronke Thermal Instability Mist",
+    tag: "Mist 10pc",
+    tagTip: "10 pc → 31 AU Isobaric Thermal Instability Mist resolving c_s t_cool",
+    credit: "Simulation: 10 pc Thermal Instability Shattering Mist (McCourt-Gronke)"
   },
   ism: {
     label: "1 kpc ISM",
     shortLabel: "1 kpc ISM",
     title: "ISM & Mixing Layers",
-    groupTitle: "Stratified Multiphase ISM & Superbubble Fountain (1 kpc → 0.048 pc, TIGRESS)",
-    msg: "1 kpc → 0.048 pc Stratified Multiphase ISM & Superbubble Fountain (TIGRESS-ISM)",
+    groupTitle: "Stratified Multiphase ISM & Superbubble Fountain (1 kpc → 3148 AU, TIGRESS)",
+    msg: "1 kpc → 3148 AU Stratified Multiphase ISM & Superbubble Fountain (TIGRESS-ISM)",
     tip: "Show 1 kpc Stratified Multiphase ISM (ISM_1kpc)",
-    topTip: "Switch to 1 kpc → 0.048 pc Stratified Multiphase ISM (ISM_1kpc)",
+    topTip: "Switch to 1 kpc → 3148 AU Stratified Multiphase ISM (ISM_1kpc)",
     tag: "ISM 1kpc",
-    tagTip: "1 kpc → 0.048 pc Stratified Multiphase ISM (TIGRESS-ISM)",
+    tagTip: "1 kpc → 3148 AU Stratified Multiphase ISM (TIGRESS-ISM)",
     credit: "Simulation: 1 kpc Stratified Multiphase ISM (TIGRESS-ISM)"
   },
   tng50: {
@@ -77,17 +139,21 @@ export const SIM_META = {
     credit: "Simulation: FIRE-2 (FIRE Collaboration)"
   }
 };
-export const SIM_ORDER = ["rtml", "ism", "tng50", "fire2"];
+export const SIM_ORDER = ["rtml", "cloudcrush", "starforge", "superbubble", "shattering", "ism", "tng50", "fire2"];
 export const galNoun = e => {
   const sk = inferSimKey(e);
-  return sk === "rtml" || sk === "ism" ? "Volume" : sk === "fire2" ? "Halo" : "Subhalo";
+  return ALL_ISM_KEYS.includes(sk) ? "Volume" : sk === "fire2" ? "Halo" : "Subhalo";
 };
 export const galWord = (e, id) => `${galNoun(e || {id})} ${id ?? e?.id ?? ""}`.trim();
 export const galShortLabel = e => {
   const id = String(e?.id ?? e ?? "");
   if (id === "RTML_50pc") return "50 pc RTML";
+  if (id === "CloudCrush_200pc") return "200 pc Cloud Crush";
+  if (id === "GMC_STARFORGE_20pc") return "20 pc STARFORGE GMC";
+  if (id === "Superbubble_500pc") return "500 pc Superbubble";
+  if (id === "ShatteringMist_10pc") return "10 pc Shattering Mist";
   if (id === "ISM_1kpc") return "1 kpc ISM";
-  return id;
+  return e?.label ? String(e.label) : id;
 };
 
 /* ---------------- index ---------------- */
@@ -110,8 +176,12 @@ export function galaxyIndex(cfg) {
 
 export const normSimKey = s => {
   const v = String(s || "").trim().toLowerCase();
-  if (v === "rtml" || v === "rtml_50pc" || v === "rtml-50pc" || v === "rtml50pc" || v === "rtml-athena++" || v === "athena++") return "rtml";
-  if (v === "ism" || v === "ism_1kpc" || v === "ism-1kpc" || v === "ism1kpc" || v === "tigress" || v === "tigress-ism") return "ism";
+  if (v === "rtml" || v === "rtml_50pc" || v === "rtml-50pc" || v === "rtml50pc" || v === "rtml-athena++" || v === "athena++" || v === "mixing_layer") return "rtml";
+  if (v === "cloudcrush" || v === "cloud_crush" || v === "cloudcrush_200pc" || v === "cloud-crush" || v === "cholla") return "cloudcrush";
+  if (v === "starforge" || v === "starforge_gmc" || v === "gmc_starforge_20pc" || v === "gmc" || v === "silcc") return "starforge";
+  if (v === "superbubble" || v === "superbubble_500pc" || v === "prfm") return "superbubble";
+  if (v === "shattering" || v === "shattering_mist" || v === "shatteringmist_10pc" || v === "mist" || v === "mccourt") return "shattering";
+  if (v === "ism" || v === "ism_1kpc" || v === "ism-1kpc" || v === "ism1kpc" || v === "tigress" || v === "tigress-ism" || v === "ism_kpc") return "ism";
   if (v === "fire" || v === "fire2" || v === "fire-2") return "fire2";
   if (v === "tng" || v === "tng50" || v === "tng50-1") return "tng50";
   return "";
@@ -245,6 +315,10 @@ export function matchGalaxy(e, q) {
       return want ? sk === want : false;
     }
     if (t === "rtml" || t === "athena++" || t === "mixing") return sk === "rtml";
+    if (t === "cloudcrush" || t === "cholla" || t === "crush") return sk === "cloudcrush";
+    if (t === "starforge" || t === "gmc" || t === "silcc") return sk === "starforge";
+    if (t === "superbubble" || t === "prfm") return sk === "superbubble";
+    if (t === "shattering" || t === "mist" || t === "mccourt") return sk === "shattering";
     if (t === "ism" || t === "tigress") return sk === "ism";
     if (t === "fire" || t === "fire2" || t === "fire-2") return sk === "fire2";
     if (t === "tng" || t === "tng50" || t === "tng50-1") return sk === "tng50";

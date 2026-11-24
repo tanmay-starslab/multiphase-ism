@@ -1,8 +1,8 @@
-// Unit checks of the hand control logic (docs/tng50/js/handmath.js): features, label hysteresis, pinch, hold/cooldown,
+// Unit checks of the hand control logic (docs/ism/js/handmath.js): features, label hysteresis, pinch, hold/cooldown,
 // swipe, palm motion -> rotation, pinch -> zoom, fist pause, the hands-win arbitration and the capability decisions.
 // Usage: node tests/js/handmath_unit.mjs
 import {handFeatures, labelSmoother, pinchGate, holdGate, swipeDetector, palmRotate, pinchZoom, arbiter, pickJob, handController,
-  decideQuick, decideBench, governor, LABELS} from "../../docs/tng50/js/handmath.js";
+  decideQuick, decideBench, governor, LABELS} from "../../docs/ism/js/handmath.js";
 
 let n = 0, bad = 0;
 const check = (ok, msg) => { n++; if (!ok) { bad++; console.log("FAIL " + msg); } else console.log("ok " + msg); };

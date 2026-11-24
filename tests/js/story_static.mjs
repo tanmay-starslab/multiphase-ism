@@ -1,5 +1,5 @@
 // Static gate of the "How a spectrum is made" story (PLAN_final §6 story_static, §5, §7, §8 U6). No browser.
-// Usage: node tests/js/story_static.mjs [docs/tng50 dir] [--story learn/how-a-spectrum-is-made]
+// Usage: node tests/js/story_static.mjs [docs/ism dir] [--story learn/how-a-spectrum-is-made]
 // ROOT = <dir>/<story>. While ROOT has neither index.html nor steps.json the test prints "skipped" and exits 0;
 // STORY_REQUIRE=1 turns that into a failure (use it once M1 is merged).
 // Checks (all over ROOT/** except vendor/, media/, build/ and binary files):
@@ -38,7 +38,7 @@ import {ROOT as REPO, parseArgs, checker, sepHits} from "./lib/browser.mjs";
 import {jsStrings, htmlParts} from "./lib/jsscan.mjs";
 
 const {pos, opt} = parseArgs(process.argv.slice(2));
-const DIR = resolve(pos[0] || join(REPO, "docs/tng50"));
+const DIR = resolve(pos[0] || join(REPO, "docs/ism"));
 const SROOT = resolve(DIR, opt.story || "learn/how-a-spectrum-is-made");
 const STEPS_F = join(SROOT, "steps.json");
 if (!existsSync(join(SROOT, "index.html")) && !existsSync(STEPS_F)) {

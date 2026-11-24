@@ -1,5 +1,5 @@
-// Hand-computed cases for docs/tng50/js/search.js (independent of the Python reference): node tests/js/search_unit.mjs
-import {validateQuery, runQuery, rankAll, fmt} from "../../docs/tng50/js/search.js";
+// Hand-computed cases for docs/ism/js/search.js (independent of the Python reference): node tests/js/search_unit.mjs
+import {validateQuery, runQuery, rankAll, fmt} from "../../docs/ism/js/search.js";
 let fails = 0; const check = (ok, msg) => { console.log(`${ok ? "ok  " : "FAIL"} ${msg}`); if (!ok) fails++; };
 const c = (v, logN, b, flag = 0) => ({v, dv: 0.1, logN, dlogN: 0.01, b, db: 0.2, region: 0, flag, EW: 10});
 const entries = [
@@ -62,7 +62,7 @@ check(rankAll({ion: "CIII"}, entries, comps).length === 0, "CIII: all empty -> n
   check(runQuery({ion: "OVI", logN_max: 18}, es, cs).length === 0, "O VI logN_max 18 drops the lower limit");
 }
 // state.js annotateLimits against tngsight.search.annotate_limits (the golden annotate_cases)
-{ const St = await import("../../docs/tng50/js/state.js"), fs = await import("node:fs"), url = await import("node:url");
+{ const St = await import("../../docs/ism/js/state.js"), fs = await import("node:fs"), url = await import("node:url");
   const G = JSON.parse(fs.readFileSync(url.fileURLToPath(new URL("../search_golden.json", import.meta.url)), "utf8"));
   check(Array.isArray(G.annotate_cases) && G.annotate_cases.length >= 5, "golden carries annotate_cases");
   for (const k of G.annotate_cases || []) {

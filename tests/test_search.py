@@ -1,5 +1,5 @@
 """Tests for tngsight.search (phase-2 design §6; Phase-3: the 12 registry ions): validation, exact semantics on
-hand-checked cases, the committed fixture/golden files (which the JS mirror docs/tng50/js/search.js is tested
+hand-checked cases, the committed fixture/golden files (which the JS mirror docs/ism/js/search.js is tested
 against), and speed."""
 import json
 import math

@@ -1,5 +1,5 @@
 // Phase-3 UI budget test in headless Edge (design 6.2, 6.6; brief C9, C11, C12, C13, C14; pick.md items 4 and 5).
-// Usage: TNG_BROWSER=1 node tests/js/ui_budget.mjs [docs/tng50 dir] [--page FILE] [--port N] [--profile DIR]
+// Usage: TNG_BROWSER=1 node tests/js/ui_budget.mjs [docs/ism dir] [--page FILE] [--port N] [--profile DIR]
 //            [--viz DIR] [--inject shim.js] [--edge BIN] [--shots DIR]
 // For 1440x900, 1024x768 and 390x844 (mobile), each in light and dark (prefers-color-scheme, measured in-page), on the
 // default state (Spectra tab, no popover open) it checks:
@@ -24,7 +24,7 @@ import {ROOT, parseArgs, checker, serve, launch, READY, UI_LIB, BLOCK, pickPage,
 
 if (!process.env.TNG_BROWSER) { console.log("skipped (set TNG_BROWSER=1 to run the headless Edge UI budget test)"); process.exit(0); }
 const {pos, opt} = parseArgs(process.argv.slice(2));
-const DIR = resolve(pos[0] || join(ROOT, "docs/tng50")), PAGE = pickPage(DIR, opt.page), SHOTS = opt.shots && resolve(opt.shots);
+const DIR = resolve(pos[0] || join(ROOT, "docs/ism")), PAGE = pickPage(DIR, opt.page), SHOTS = opt.shots && resolve(opt.shots);
 const C = checker(), check = C.check, note = C.note;
 const srv = await serve({dir: DIR, page: PAGE, port: opt.port, viz: opt.viz || process.env.TNG_VIZ});
 const P = await launch({profile: opt.profile, edge: opt.edge, inject: readInjects(opt.inject), block: BLOCK});

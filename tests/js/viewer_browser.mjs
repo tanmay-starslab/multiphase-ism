@@ -1,13 +1,13 @@
 // Headless-browser test of the 3D viewer (Phase-2b design §5.11 items 6-8; Phase-3 design §6.2 C13). Run manually:
 //   TNG_BROWSER=1 node tests/js/viewer_browser.mjs --viz <viz dir with manifest_v2.json> [--port N]
 //       [--profile <parent dir of the temp browser profile>] [--shots <dir>] [--bench 60] [--edge <binary>]
-//       [--page <html served at /tng50/>] [--docs <dir served as /tng50/, default docs/tng50>]
+//       [--page <html served at /tng50/>] [--docs <dir served as /tng50/, default docs/ism>]
 // Phase 3 adds: the square stage (|w - h| <= 1, at most 60 vw) beside the grouped control column (Field, View, Layers,
 // Mode, Pick ray), the 15-entry species menu (nH, T, Z + 12 ions in ladder order; species without cubes disabled with a
 // tooltip, setSpecies on them false without an exception), no dot separators in the viewer's text, and, when the page
 // has a #v3d-mini-host thumbnail (mountThumb), the thumbnail checks: shared cubes, square, not blank, the slow turn
 // pausing off-screen, click to the 3D tab with the camera restored, and a thumbnail-first cold load (L0/L1 only).
-// It starts its own static server (the page at /tng50/ from docs/tng50, the viz dir at /viz/) on --port, else
+// It starts its own static server (the page at /tng50/ from docs/ism, the viz dir at /viz/) on --port, else
 // TNG_TEST_PORT, else an OS-chosen port (8787 and 8000 are refused), launches the browser headless through
 // tests/js/lib/browser.mjs like the other browser tests (binary --edge or TNG_EDGE; --remote-debugging-port=0, read back
 // from DevToolsActivePort; a fresh profile under --profile, TNG_EDGE_PROFILE or the OS temp dir, never inside the viz
@@ -46,7 +46,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 /* ---- static server ---- */
 const TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json", ".webp": "image/webp",
   ".gz": "application/octet-stream", ".bin": "application/octet-stream", ".png": "image/png", ".css": "text/css", ".svg": "image/svg+xml"};
-const DOCS = A.docs ? resolve(A.docs) : join(ROOT, "docs/tng50"), ix = join(DOCS, "index.html");
+const DOCS = A.docs ? resolve(A.docs) : join(ROOT, "docs/ism"), ix = join(DOCS, "index.html");
 const PAGE = A.page ? resolve(A.page) : existsSync(ix) && readFileSync(ix, "utf8").includes("manifest_v2") ? ix : join(DOCS, "_template.html");   // --page: another page file
 let blockViz = false; const held = [], hangSeen = [];
 const MEM = new Map(), readMem = f => { if (!MEM.has(f)) MEM.set(f, readFileSync(f)); return MEM.get(f); };   // the viz dir may sit on a slow disk

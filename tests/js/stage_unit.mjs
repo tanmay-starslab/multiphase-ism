@@ -11,10 +11,10 @@ import {dirname, join, resolve, extname} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 import {readFileSync, existsSync} from "node:fs";
 import {createServer} from "node:http";
-const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = resolve(HERE, "../.."), ST = join(ROOT, "docs/tng50/learn/how-a-spectrum-is-made/js/stage");
+const HERE = dirname(fileURLToPath(import.meta.url)), ROOT = resolve(HERE, "../.."), ST = join(ROOT, "docs/ism/learn/how-a-spectrum-is-made/js/stage");
 const imp = f => import(pathToFileURL(f).href);
 const [{createGovernor}, {classify}, tube, rc, tfs, {createVolCore}] = await Promise.all([imp(join(ST, "governor.js")), imp(join(ST, "glcheck.js")), imp(join(ST, "tube.js")),
-  imp(join(ST, "raycells.js")), imp(join(ST, "tfstory.js")), imp(join(ROOT, "docs/tng50/js/volcore.js"))]);
+  imp(join(ST, "raycells.js")), imp(join(ST, "tfstory.js")), imp(join(ROOT, "docs/ism/js/volcore.js"))]);
 let fails = 0; const check = (ok, msg) => { console.log(`${ok ? "ok  " : "FAIL"} ${msg}`); if (!ok) fails++; };
 
 /* ---- governor ---- */
@@ -132,7 +132,7 @@ check(classify({webgl2: false, force3d: true}).tier === "stills", "glcheck: no W
 /* ---- phase 1: story-tube/1, kernel CDF from story-data/2, shells, governor rungs, band ceiling, speed colours ---- */
 { const [G, SH, PO, STG] = await Promise.all([imp(join(ST, "governor.js")), imp(join(ST, "shells.js")), imp(join(ST, "post.js")), imp(join(ST, "stage.js"))]);
   const zlib = await import("node:zlib");
-  const SD = join(ROOT, "docs/tng50/learn/how-a-spectrum-is-made/data"), dataF = join(SD, "story_488530_rand_b062_a062.json");
+  const SD = join(ROOT, "docs/ism/learn/how-a-spectrum-is-made/data"), dataF = join(SD, "story_488530_rand_b062_a062.json");
   /* story-tube/1 round trip on synthetic records */
   { const fr = {n: [0, 0.6, 0.8], up: [0, 0.8, -0.6], side: [1, 0, 0], p0: [5, -100, -130], half: 250}, lo = [-260, -22, -22], span = [520, 44, 44], n = 4, st = 14;
     const buf = new ArrayBuffer(n * st), dv = new DataView(buf), src = [];
@@ -253,8 +253,8 @@ window.__res = {clear, fogged, ratio: fogged / clear, expect, alpha, L};
   const TYPES = {".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json"};
   const srv = createServer((req, res) => { const u = decodeURIComponent(req.url.split("?")[0]);
     if (u === "/") { res.writeHead(200, {"Content-Type": "text/html"}); res.end(page); return; }
-    const f = u.startsWith("/tng50/") ? join(ROOT, "docs/tng50", u.slice(7)) : null;
-    if (!f || !f.startsWith(join(ROOT, "docs/tng50")) || !existsSync(f)) { res.writeHead(404); res.end(); return; }
+    const f = u.startsWith("/tng50/") ? join(ROOT, "docs/ism", u.slice(7)) : null;
+    if (!f || !f.startsWith(join(ROOT, "docs/ism")) || !existsSync(f)) { res.writeHead(404); res.end(); return; }
     res.writeHead(200, {"Content-Type": TYPES[extname(f)] || "application/octet-stream"}); res.end(readFileSync(f)); });
   await new Promise(r => srv.listen(0, "127.0.0.1", r));
   const P = await launch({width: 400, height: 300, edge: A.edge});

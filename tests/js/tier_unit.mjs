@@ -1,4 +1,4 @@
-// Device tier gate (perf R5): the inline head script of docs/tng50/_template.html (#tier-gate) run in a fake window.
+// Device tier gate (perf R5): the inline head script of docs/ism/_template.html (#tier-gate) run in a fake window.
 // decide() is pure: low / mid / high from the cheap signals and the WebGL probe; then the gate itself: html[data-tier],
 // the ?tier= override, the stored probe result and a context loss this session. The exported index.html carries the same script.
 // Usage: node tests/js/tier_unit.mjs
@@ -6,11 +6,11 @@ import {readFileSync} from "node:fs";
 import {join} from "node:path";
 import vm from "node:vm";
 import {ROOT, checker} from "./lib/browser.mjs";
-import {probe} from "../../docs/tng50/js/tier.js";
-import * as GLC from "../../docs/tng50/learn/how-a-spectrum-is-made/js/stage/glcheck.js";
+import {probe} from "../../docs/ism/js/tier.js";
+import * as GLC from "../../docs/ism/learn/how-a-spectrum-is-made/js/stage/glcheck.js";
 
 const C = checker(), check = C.check;
-const html = f => readFileSync(join(ROOT, "docs/tng50", f), "utf8");
+const html = f => readFileSync(join(ROOT, "docs/ism", f), "utf8");
 const gateOf = s => (s.match(/<script id="tier-gate">([\s\S]*?)<\/script>/) || [])[1];
 const SRC = gateOf(html("_template.html"));
 check(!!SRC, "the template has the #tier-gate head script");

@@ -12,7 +12,7 @@ import {join, resolve} from "node:path";
 import {launch, serve, BLOCK, parseArgs, sleep, ROOT, checker, pickPage, READY} from "./lib/browser.mjs";
 
 if (!process.env.TNG_BROWSER) { console.log("skipped (set TNG_BROWSER=1 to run the phone controls test)"); process.exit(0); }
-const {opt} = parseArgs(process.argv.slice(2)), DOCS = resolve(opt.docs || join(ROOT, "docs/tng50"));
+const {opt} = parseArgs(process.argv.slice(2)), DOCS = resolve(opt.docs || join(ROOT, "docs/ism"));
 const VIZ = opt.viz || process.env.TNG_VIZ ? resolve(opt.viz || process.env.TNG_VIZ) : null, HAS3D = !!VIZ && existsSync(join(VIZ, "manifest_v2.json"));
 const SHOTS = opt.shots && resolve(opt.shots), ONLY = opt.only ? String(opt.only).split(",") : null, THEMES = String(opt.themes || "dark").split(",");
 const VP = [["390x844", 390, 844], ["360x740", 360, 740]].filter(v => !ONLY || ONLY.includes(v[0]));

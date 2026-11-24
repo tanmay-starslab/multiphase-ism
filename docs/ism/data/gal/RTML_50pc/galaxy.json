@@ -1,0 +1,38 @@
+{
+ "sim": "RTML-Athena++",
+ "snapshot": 100,
+ "redshift": 0.0,
+ "subhalo_id": "RTML_50pc",
+ "central": true,
+ "TNG_H": 1.0,
+ "center_kpc": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "R200c_kpc": 0.025,
+ "M200c_Msun": 10000000.0,
+ "Mstar_Msun": 100000.0,
+ "SFR_Msun_yr": 0.15,
+ "Lhat": [
+  0.0,
+  0.0,
+  1.0
+ ],
+ "xhat": [
+  1.0,
+  0.0,
+  0.0
+ ],
+ "yhat": [
+  0.0,
+  1.0,
+  0.0
+ ],
+ "SubhaloVel_kms": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "disk_frame_source": "interface_normal_z_shear_x"
+}

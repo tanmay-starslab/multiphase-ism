@@ -1,0 +1,38 @@
+{
+ "sim": "Gronke-Oh / Cholla Cloud Crushing",
+ "snapshot": 100,
+ "redshift": 0.0,
+ "subhalo_id": "CloudCrush_200pc",
+ "central": true,
+ "TNG_H": 1.0,
+ "center_kpc": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "R200c_kpc": 0.1,
+ "M200c_Msun": 250000000.0,
+ "Mstar_Msun": 2500000.0,
+ "SFR_Msun_yr": 0.35,
+ "Lhat": [
+  0.0,
+  0.0,
+  1.0
+ ],
+ "xhat": [
+  1.0,
+  0.0,
+  0.0
+ ],
+ "yhat": [
+  0.0,
+  1.0,
+  0.0
+ ],
+ "SubhaloVel_kms": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "disk_frame_source": "interface_normal_z_shear_x"
+}

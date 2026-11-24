@@ -16,7 +16,7 @@ import {ROOT as REPO, serve, launch, sleep} from "./lib/browser.mjs";
 
 if (!process.env.TNG_BROWSER) { console.log("skipped (set TNG_BROWSER=1 to run the story input test)"); process.exit(0); }
 
-const DOCS = join(REPO, "docs/tng50");
+const DOCS = join(REPO, "docs/ism");
 const dir = join(tmpdir(), `story-input-${process.pid}`); mkdirSync(dir, {recursive: true});
 const page = join(dir, "harness.html");
 writeFileSync(page, `<!doctype html><html><head><meta charset="utf-8">
