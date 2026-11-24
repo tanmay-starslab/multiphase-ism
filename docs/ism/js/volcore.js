@@ -21,8 +21,8 @@
 //   core.setSynthetic(field, level, Uint8Array, {vmin, vmax})     test hook: a resident level without a network load
 //   core.prewarm({r8, rgba, n, yieldFn}) -> Promise                allocate and first-touch a texture pool (behind the gate)
 //   core.drop(field, level)                                        release one level (its texture returns to the pool)
-import {makeLoader, packVelocityOffThread} from "./vizload.js?v=20261124a";
-import {VEL_COMP_KEYS} from "./vizdata.js?v=20261124a";
+import {makeLoader, packVelocityOffThread} from "./vizload.js?v=20261124c";
+import {VEL_COMP_KEYS} from "./vizdata.js?v=20261124c";
 
 export const LEVELS = ["L0", "L1", "L2"];
 export const SLICES_DEFAULT = 16, BUDGET_MS_DEFAULT = 4;
