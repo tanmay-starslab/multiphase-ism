@@ -21,7 +21,7 @@ jobs:
       - name: Install Python dependencies
         run: pip install --upgrade pip pytest numpy scipy pillow h5py
       - name: Run Python unit tests
-        run: pytest tests/test_ism_ingest.py -v
+        run: python -m pytest tests/test_ism_ingest.py -v
       - name: Run JS static & unit contract suite
         run: |
           node tests/js/ui_static.mjs docs/ism
